@@ -1,0 +1,447 @@
+package com.example.smarthomeai
+
+import android.content.Intent
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+class SignupActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            SignupUI(
+                onSignInClick = {
+                    finish()
+                },
+                onSignUpSuccess = {
+                    startActivity(Intent(this, LoginActivity::class.java))
+                    finish()
+                }
+            )
+        }
+    }
+}
+
+// SHARED FIELD COLORS
+@Composable
+fun signupFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedContainerColor   = Color.White,
+    unfocusedContainerColor = Color.White,
+    focusedBorderColor      = Color(0xFF2CF46F),
+    unfocusedBorderColor    = Color(0xFFDDDDDD),
+    focusedTextColor        = Color.Black,
+    unfocusedTextColor      = Color.Black,
+    cursorColor             = Color(0xFF008F8F),
+    focusedPlaceholderColor = Color.Gray,
+    unfocusedPlaceholderColor = Color.Gray,
+    focusedLeadingIconColor = Color.Gray,
+    unfocusedLeadingIconColor = Color.Gray
+)
+
+val fieldTextStyle = TextStyle(color = Color.Black, fontSize = 14.sp)
+val fieldShape = RoundedCornerShape(50.dp)
+
+@Composable
+fun SignupUI(
+    onSignInClick: () -> Unit = {},
+    onSignUpSuccess: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    var firstName by remember { mutableStateOf("") }
+    var lastName by remember { mutableStateOf("") }
+    var selectedTab by remember { mutableIntStateOf(0) }
+    var emailInput by remember { mutableStateOf("") }
+    var mobileInput by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var showError by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
+
+    val greenGradient = Brush.horizontalGradient(
+        listOf(Color(0xFF2CF46F), Color(0xFF008F8F))
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF5F5F5))
+            .verticalScroll(rememberScrollState())
+    ) {
+
+        // HEADER
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF2CF46F), Color(0xFF007A8A))
+                    )
+                ),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(top = 48.dp)
+            ) {
+                Text(
+                    "CREATE ACCOUNT",
+                    color = Color.White,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp
+                )
+                Text(
+                    "JOIN HOME CONTROL TODAY",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 10.sp,
+                    letterSpacing = 1.5.sp
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .background(Color.White.copy(alpha = 0.2f), CircleShape)
+                        .border(2.dp, Color.White.copy(alpha = 0.5f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Person,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+            }
+        }
+
+        // FORM
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 24.dp, bottom = 32.dp)
+                .padding(horizontal = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Error Message
+            if (showError) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFE5E5)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        errorMessage,
+                        color = Color.Red,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // FULL NAME
+            SectionLabel("Full Name")
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedTextField(
+                    value = firstName,
+                    onValueChange = { firstName = it },
+                    placeholder = { Text("First name", fontSize = 13.sp) },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    textStyle = fieldTextStyle,
+                    shape = fieldShape,
+                    colors = signupFieldColors(),
+                    singleLine = true,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                )
+                OutlinedTextField(
+                    value = lastName,
+                    onValueChange = { lastName = it },
+                    placeholder = { Text("Last name", fontSize = 13.sp) },
+                    textStyle = fieldTextStyle,
+                    shape = fieldShape,
+                    colors = signupFieldColors(),
+                    singleLine = true,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // LOGIN METHOD TAB
+            SectionLabel("Login Method")
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(46.dp)
+                    .background(Color(0xFFE0E0E0), RoundedCornerShape(50.dp))
+                    .padding(4.dp)
+            ) {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    listOf(
+                        "Gmail" to Icons.Default.Email,
+                        "Mobile" to Icons.Default.Phone
+                    ).forEachIndexed { index, (label, icon) ->
+                        val isActive = selectedTab == index
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .then(
+                                    if (isActive) Modifier.background(greenGradient, RoundedCornerShape(50.dp))
+                                    else Modifier
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            TextButton(
+                                onClick = { selectedTab = index },
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Icon(
+                                    icon,
+                                    contentDescription = null,
+                                    tint = if (isActive) Color.Black else Color.Gray,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    label,
+                                    color = if (isActive) Color.Black else Color.Gray,
+                                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // EMAIL / MOBILE INPUT
+            if (selectedTab == 0) {
+                OutlinedTextField(
+                    value = emailInput,
+                    onValueChange = { emailInput = it },
+                    placeholder = { Text("Gmail address") },
+                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    textStyle = fieldTextStyle,
+                    shape = fieldShape,
+                    colors = signupFieldColors(),
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                )
+            } else {
+                OutlinedTextField(
+                    value = mobileInput,
+                    onValueChange = { mobileInput = it },
+                    placeholder = { Text("+880 Mobile number") },
+                    leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    textStyle = fieldTextStyle,
+                    shape = fieldShape,
+                    colors = signupFieldColors(),
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // PASSWORD
+            SectionLabel("Password")
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                placeholder = { Text("Create password") },
+                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                textStyle = fieldTextStyle,
+                shape = fieldShape,
+                colors = signupFieldColors(),
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = confirmPassword,
+                onValueChange = { confirmPassword = it },
+                placeholder = { Text("Confirm password") },
+                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                textStyle = fieldTextStyle,
+                shape = fieldShape,
+                colors = signupFieldColors(),
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // CREATE ACCOUNT BUTTON
+            Button(
+                onClick = {
+                    when {
+                        firstName.isBlank() || lastName.isBlank() -> {
+                            showError = true
+                            errorMessage = "Please enter your full name"
+                        }
+                        selectedTab == 0 && emailInput.isBlank() -> {
+                            showError = true
+                            errorMessage = "Please enter your email address"
+                        }
+                        selectedTab == 1 && mobileInput.isBlank() -> {
+                            showError = true
+                            errorMessage = "Please enter your mobile number"
+                        }
+                        password.isBlank() -> {
+                            showError = true
+                            errorMessage = "Please enter a password"
+                        }
+                        password != confirmPassword -> {
+                            showError = true
+                            errorMessage = "Passwords do not match"
+                        }
+                        password.length < 6 -> {
+                            showError = true
+                            errorMessage = "Password must be at least 6 characters"
+                        }
+                        else -> {
+                            showError = false
+                            onSignUpSuccess()
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                contentPadding = PaddingValues(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(greenGradient, RoundedCornerShape(16.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "Create Account",
+                        color = Color.Black,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // TERMS
+            Text(
+                buildAnnotatedString {
+                    append("By signing up you agree to our ")
+                    withStyle(SpanStyle(color = Color(0xFF008F8F), fontWeight = FontWeight.SemiBold)) {
+                        append("Terms")
+                    }
+                    append(" & ")
+                    withStyle(SpanStyle(color = Color(0xFF008F8F), fontWeight = FontWeight.SemiBold)) {
+                        append("Privacy Policy")
+                    }
+                },
+                fontSize = 11.sp,
+                color = Color.Gray,
+                lineHeight = 16.sp
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // SIGN IN ROW
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Already have an account? ", color = Color.Gray, fontSize = 13.sp)
+                TextButton(
+                    onClick = onSignInClick
+                ) {
+                    Text(
+                        "Sign In",
+                        color = Color(0xFF008F8F),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SectionLabel(text: String) {
+    Text(
+        text.uppercase(),
+        fontSize = 11.sp,
+        color = Color.Gray,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 1.sp,
+        modifier = Modifier.fillMaxWidth()
+    )
+}
