@@ -13,7 +13,6 @@
         android:theme="@style/Theme.SmartHomeAI"
         tools:targetApi="31">
 
-        <!-- LoginActivity is the LAUNCHER (Main entry point) -->
         <activity
             android:name=".LoginActivity"
             android:exported="true"
@@ -24,16 +23,17 @@
             </intent-filter>
         </activity>
 
-        <!-- SignupActivity -->
         <activity
             android:name=".SignupActivity"
-            android:theme="@style/Theme.SmartHomeAI" />
+            android:exported="false" />
 
-        <!-- MainActivity (Dashboard after login) -->
+        <activity
+            android:name=".HomeActivity"
+            android:exported="false" />
+
         <activity
             android:name=".MainActivity"
-            android:exported="false"
-            android:theme="@style/Theme.SmartHomeAI" />
+            android:exported="false" />
 
     </application>
 

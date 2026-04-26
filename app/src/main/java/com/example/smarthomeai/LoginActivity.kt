@@ -31,10 +31,21 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
 
 class LoginActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Check if user is already logged in
+        val auth = Firebase.auth
+        if (auth.currentUser != null) {
+            startActivity(Intent(this, HomeActivity::class.java))
+            finish()
+            return
+        }
+
         setContent { LoginUI() }
     }
 }
@@ -42,12 +53,14 @@ class LoginActivity : ComponentActivity() {
 @Composable
 fun LoginUI() {
     val context = LocalContext.current
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Gmail, 1 = Mobile
+    val auth = Firebase.auth
+    var selectedTab by remember { mutableIntStateOf(0) }
     var emailInput by remember { mutableStateOf("") }
     var mobileInput by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
 
     val greenGradient = Brush.horizontalGradient(
         listOf(Color(0xFF2CF46F), Color(0xFF008F8F))
@@ -55,7 +68,7 @@ fun LoginUI() {
 
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF5F5F5))) {
 
-        // ── TOP HEADER ──
+        // TOP HEADER
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -113,7 +126,16 @@ fun LoginUI() {
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // ── TAB SWITCHER ──
+            // Loading Indicator
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(40.dp),
+                    color = Color(0xFF2CF46F)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // TAB SWITCHER
             Box(
                 modifier = Modifier
                     .width(300.dp)
@@ -136,7 +158,7 @@ fun LoginUI() {
                         contentAlignment = Alignment.Center
                     ) {
                         TextButton(
-                            onClick = { selectedTab = 0 },
+                            onClick = { if (!isLoading) selectedTab = 0 },
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(0.dp)
                         ) {
@@ -170,7 +192,7 @@ fun LoginUI() {
                         contentAlignment = Alignment.Center
                     ) {
                         TextButton(
-                            onClick = { selectedTab = 1 },
+                            onClick = { if (!isLoading) selectedTab = 1 },
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(0.dp)
                         ) {
@@ -194,7 +216,7 @@ fun LoginUI() {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ── EMAIL / MOBILE INPUT ──
+            // EMAIL / MOBILE INPUT
             if (selectedTab == 0) {
                 OutlinedTextField(
                     value = emailInput,
@@ -215,7 +237,8 @@ fun LoginUI() {
                         unfocusedTextColor = Color.Black,
                         cursorColor = Color(0xFF008F8F)
                     ),
-                    modifier = Modifier.width(300.dp).height(58.dp)
+                    modifier = Modifier.width(300.dp).height(58.dp),
+                    enabled = !isLoading
                 )
             } else {
                 OutlinedTextField(
@@ -237,13 +260,14 @@ fun LoginUI() {
                         unfocusedTextColor = Color.Black,
                         cursorColor = Color(0xFF008F8F)
                     ),
-                    modifier = Modifier.width(300.dp).height(58.dp)
+                    modifier = Modifier.width(300.dp).height(58.dp),
+                    enabled = !isLoading
                 )
             }
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // ── PASSWORD ──
+            // PASSWORD
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
@@ -264,10 +288,11 @@ fun LoginUI() {
                     unfocusedTextColor = Color.Black,
                     cursorColor = Color(0xFF008F8F)
                 ),
-                modifier = Modifier.width(300.dp).height(58.dp)
+                modifier = Modifier.width(300.dp).height(58.dp),
+                enabled = !isLoading
             )
 
-            // ── FORGOT PASSWORD ──
+            // FORGOT PASSWORD
             Box(
                 modifier = Modifier.width(300.dp),
                 contentAlignment = Alignment.CenterEnd
@@ -284,7 +309,7 @@ fun LoginUI() {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // ── SIGN IN BUTTON ──
+            // SIGN IN BUTTON
             Button(
                 onClick = {
                     when {
@@ -302,17 +327,48 @@ fun LoginUI() {
                         }
                         else -> {
                             showError = false
-                            // Navigate to MainActivity after successful login
-                            val intent = Intent(context, MainActivity::class.java)
-                            context.startActivity(intent)
-                            (context as? ComponentActivity)?.finish()
+                            isLoading = true
+
+                            if (selectedTab == 0) {
+                                // Email/Password Login
+                                auth.signInWithEmailAndPassword(emailInput, password)
+                                    .addOnCompleteListener { task ->
+                                        isLoading = false
+                                        if (task.isSuccessful) {
+                                            val intent = Intent(context, HomeActivity::class.java)
+                                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                                            context.startActivity(intent)
+                                            (context as? ComponentActivity)?.finish()
+                                        } else {
+                                            showError = true
+                                            errorMessage = task.exception?.message ?: "Login failed"
+                                        }
+                                    }
+                            } else {
+                                // Mobile number login - using email format
+                                val emailForMobile = "$mobileInput@mobileuser.com"
+                                auth.signInWithEmailAndPassword(emailForMobile, password)
+                                    .addOnCompleteListener { task ->
+                                        isLoading = false
+                                        if (task.isSuccessful) {
+                                            val intent = Intent(context, HomeActivity::class.java)
+                                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                                            context.startActivity(intent)
+                                            (context as? ComponentActivity)?.finish()
+                                        } else {
+                                            showError = true
+                                            errorMessage = "Invalid mobile number or password. Please sign up first."
+                                        }
+                                    }
+                            }
                         }
                     }
                 },
                 shape = RoundedCornerShape(18.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
                 contentPadding = PaddingValues(),
-                modifier = Modifier.width(300.dp).height(54.dp)
+                modifier = Modifier.width(300.dp).height(54.dp),
+                enabled = !isLoading
             ) {
                 Box(
                     modifier = Modifier
@@ -321,7 +377,7 @@ fun LoginUI() {
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        "Sign In",
+                        if (isLoading) "Signing In..." else "Sign In",
                         color = Color.Black,
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp
@@ -331,12 +387,14 @@ fun LoginUI() {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ── SIGN UP ROW ──
+            // SIGN UP ROW
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Don't have an account? ", color = Color.Gray, fontSize = 13.sp)
                 TextButton(
                     onClick = {
-                        context.startActivity(Intent(context, SignupActivity::class.java))
+                        if (!isLoading) {
+                            context.startActivity(Intent(context, SignupActivity::class.java))
+                        }
                     }
                 ) {
                     Text(
@@ -351,7 +409,7 @@ fun LoginUI() {
     }
 }
 
-// ── HOUSE DRAWING ──
+// HOUSE DRAWING FUNCTION
 fun DrawScope.drawHouseScene() {
     val w = size.width
     val h = size.height

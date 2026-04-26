@@ -1,18 +1,17 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.gms.google-services")
 }
 
 android {
     namespace = "com.example.smarthomeai"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36  // আপডেট করা হয়েছে 36 এ
 
     defaultConfig {
         applicationId = "com.example.smarthomeai"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 36  // আপডেট করা হয়েছে 36 এ
         versionCode = 1
         versionName = "1.0"
 
@@ -46,6 +45,12 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation("androidx.compose.material:material-icons-extended:1.7.5")
+
+    // Firebase
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-auth-ktx")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
