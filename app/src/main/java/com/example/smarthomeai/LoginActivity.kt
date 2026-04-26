@@ -38,7 +38,6 @@ class LoginActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Check if user is already logged in
         val auth = Firebase.auth
         if (auth.currentUser != null) {
             startActivity(Intent(this, HomeActivity::class.java))
@@ -330,22 +329,32 @@ fun LoginUI() {
                             isLoading = true
 
                             if (selectedTab == 0) {
-                                // Email/Password Login
+                                // Email/Password Login with Verification Check
                                 auth.signInWithEmailAndPassword(emailInput, password)
                                     .addOnCompleteListener { task ->
                                         isLoading = false
                                         if (task.isSuccessful) {
-                                            val intent = Intent(context, HomeActivity::class.java)
-                                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                                            context.startActivity(intent)
-                                            (context as? ComponentActivity)?.finish()
+                                            val user = auth.currentUser
+
+                                            // Check if email is verified
+                                            if (user?.isEmailVerified == true) {
+                                                val intent = Intent(context, HomeActivity::class.java)
+                                                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                                                context.startActivity(intent)
+                                                (context as? ComponentActivity)?.finish()
+                                            } else {
+                                                // Email not verified - sign out and show error
+                                                auth.signOut()
+                                                showError = true
+                                                errorMessage = "Please verify your email address first. Check your inbox."
+                                            }
                                         } else {
                                             showError = true
                                             errorMessage = task.exception?.message ?: "Login failed"
                                         }
                                     }
                             } else {
-                                // Mobile number login - using email format
+                                // Mobile number login - no verification needed
                                 val emailForMobile = "$mobileInput@mobileuser.com"
                                 auth.signInWithEmailAndPassword(emailForMobile, password)
                                     .addOnCompleteListener { task ->

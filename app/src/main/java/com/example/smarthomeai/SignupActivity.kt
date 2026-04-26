@@ -30,6 +30,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,12 +44,10 @@ class SignupActivity : ComponentActivity() {
         setContent {
             SignupUI(
                 onSignInClick = {
-                    // Go to Login Activity (when clicking "Sign In" link)
                     startActivity(Intent(this, LoginActivity::class.java))
                     finish()
                 },
                 onSignUpSuccess = {
-                    // After successful signup, go to Login Activity (not Home)
                     startActivity(Intent(this, LoginActivity::class.java))
                     finish()
                 }
@@ -57,7 +56,6 @@ class SignupActivity : ComponentActivity() {
     }
 }
 
-// SHARED FIELD COLORS
 @Composable
 fun signupFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedContainerColor   = Color.White,
@@ -93,6 +91,7 @@ fun SignupUI(
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+    var showVerificationNotice by remember { mutableStateOf(false) }
 
     val greenGradient = Brush.horizontalGradient(
         listOf(Color(0xFF2CF46F), Color(0xFF008F8F))
@@ -163,6 +162,45 @@ fun SignupUI(
 
             Spacer(modifier = Modifier.height(20.dp))
 
+            // Verification Notice
+            if (showVerificationNotice) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "✓ Verification Email Sent!",
+                            color = Color(0xFF2E7D32),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "Please check your inbox and verify your email address before signing in.",
+                            color = Color(0xFF2E7D32),
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { onSignInClick() },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF2CF46F),
+                                contentColor = Color.Black
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Go to Sign In")
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             // Error Message
             if (showError) {
                 Card(
@@ -188,315 +226,339 @@ fun SignupUI(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // FULL NAME
-            SectionLabel("Full Name")
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                OutlinedTextField(
-                    value = firstName,
-                    onValueChange = { firstName = it },
-                    placeholder = { Text("First name", fontSize = 13.sp) },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    },
-                    textStyle = fieldTextStyle,
-                    shape = fieldShape,
-                    colors = signupFieldColors(),
-                    singleLine = true,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(56.dp),
-                    enabled = !isLoading
-                )
-                OutlinedTextField(
-                    value = lastName,
-                    onValueChange = { lastName = it },
-                    placeholder = { Text("Last name", fontSize = 13.sp) },
-                    textStyle = fieldTextStyle,
-                    shape = fieldShape,
-                    colors = signupFieldColors(),
-                    singleLine = true,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(56.dp),
-                    enabled = !isLoading
-                )
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            // LOGIN METHOD TAB
-            SectionLabel("Login Method")
-            Spacer(modifier = Modifier.height(8.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(46.dp)
-                    .background(Color(0xFFE0E0E0), RoundedCornerShape(50.dp))
-                    .padding(4.dp)
-            ) {
-                Row(modifier = Modifier.fillMaxSize()) {
-                    listOf(
-                        "Gmail" to Icons.Default.Email,
-                        "Mobile" to Icons.Default.Phone
-                    ).forEachIndexed { index, (label, icon) ->
-                        val isActive = selectedTab == index
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .then(
-                                    if (isActive) Modifier.background(greenGradient, RoundedCornerShape(50.dp))
-                                    else Modifier
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            TextButton(
-                                onClick = { if (!isLoading) selectedTab = index },
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(0.dp)
-                            ) {
-                                Icon(
-                                    icon,
-                                    contentDescription = null,
-                                    tint = if (isActive) Color.Black else Color.Gray,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    label,
-                                    color = if (isActive) Color.Black else Color.Gray,
-                                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                                    fontSize = 13.sp
-                                )
-                            }
-                        }
-                    }
+            if (!showVerificationNotice) {
+                // FULL NAME
+                SectionLabel("Full Name")
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedTextField(
+                        value = firstName,
+                        onValueChange = { firstName = it },
+                        placeholder = { Text("First name", fontSize = 13.sp) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        textStyle = fieldTextStyle,
+                        shape = fieldShape,
+                        colors = signupFieldColors(),
+                        singleLine = true,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp),
+                        enabled = !isLoading
+                    )
+                    OutlinedTextField(
+                        value = lastName,
+                        onValueChange = { lastName = it },
+                        placeholder = { Text("Last name", fontSize = 13.sp) },
+                        textStyle = fieldTextStyle,
+                        shape = fieldShape,
+                        colors = signupFieldColors(),
+                        singleLine = true,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp),
+                        enabled = !isLoading
+                    )
                 }
-            }
 
-            Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-            // EMAIL / MOBILE INPUT
-            if (selectedTab == 0) {
-                OutlinedTextField(
-                    value = emailInput,
-                    onValueChange = { emailInput = it },
-                    placeholder = { Text("Gmail address") },
-                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    textStyle = fieldTextStyle,
-                    shape = fieldShape,
-                    colors = signupFieldColors(),
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    enabled = !isLoading
-                )
-            } else {
-                OutlinedTextField(
-                    value = mobileInput,
-                    onValueChange = { mobileInput = it },
-                    placeholder = { Text("+880 Mobile number") },
-                    leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    textStyle = fieldTextStyle,
-                    shape = fieldShape,
-                    colors = signupFieldColors(),
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    enabled = !isLoading
-                )
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            // PASSWORD
-            SectionLabel("Password")
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                placeholder = { Text("Create password") },
-                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                textStyle = fieldTextStyle,
-                shape = fieldShape,
-                colors = signupFieldColors(),
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                enabled = !isLoading
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = confirmPassword,
-                onValueChange = { confirmPassword = it },
-                placeholder = { Text("Confirm password") },
-                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                textStyle = fieldTextStyle,
-                shape = fieldShape,
-                colors = signupFieldColors(),
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                enabled = !isLoading
-            )
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // CREATE ACCOUNT BUTTON
-            Button(
-                onClick = {
-                    when {
-                        firstName.isBlank() || lastName.isBlank() -> {
-                            showError = true
-                            errorMessage = "Please enter your full name"
-                        }
-                        selectedTab == 0 && emailInput.isBlank() -> {
-                            showError = true
-                            errorMessage = "Please enter your email address"
-                        }
-                        selectedTab == 1 && mobileInput.isBlank() -> {
-                            showError = true
-                            errorMessage = "Please enter your mobile number"
-                        }
-                        password.isBlank() -> {
-                            showError = true
-                            errorMessage = "Please enter a password"
-                        }
-                        password != confirmPassword -> {
-                            showError = true
-                            errorMessage = "Passwords do not match"
-                        }
-                        password.length < 6 -> {
-                            showError = true
-                            errorMessage = "Password must be at least 6 characters"
-                        }
-                        else -> {
-                            showError = false
-                            isLoading = true
-
-                            val fullName = "$firstName $lastName"
-
-                            if (selectedTab == 0) {
-                                // Email/Password Sign Up
-                                auth.createUserWithEmailAndPassword(emailInput, password)
-                                    .addOnCompleteListener { task ->
-                                        isLoading = false
-                                        if (task.isSuccessful) {
-                                            // Update display name with full name
-                                            val user = task.result?.user
-                                            val profileUpdates = UserProfileChangeRequest.Builder()
-                                                .setDisplayName(fullName)
-                                                .build()
-                                            user?.updateProfile(profileUpdates)?.addOnCompleteListener { updateTask ->
-                                                // IMPORTANT: Go to Login page, NOT Home
-                                                onSignUpSuccess()
-                                            } ?: onSignUpSuccess()
-                                        } else {
-                                            showError = true
-                                            errorMessage = task.exception?.message ?: "Sign up failed"
-                                        }
-                                    }
-                            } else {
-                                // Mobile sign up - create email-based account using mobile as email
-                                val emailForMobile = "$mobileInput@mobileuser.com"
-                                auth.createUserWithEmailAndPassword(emailForMobile, password)
-                                    .addOnCompleteListener { task ->
-                                        isLoading = false
-                                        if (task.isSuccessful) {
-                                            // Update display name with full name
-                                            val user = task.result?.user
-                                            val profileUpdates = UserProfileChangeRequest.Builder()
-                                                .setDisplayName(fullName)
-                                                .build()
-                                            user?.updateProfile(profileUpdates)?.addOnCompleteListener { updateTask ->
-                                                // IMPORTANT: Go to Login page, NOT Home
-                                                onSignUpSuccess()
-                                            } ?: onSignUpSuccess()
-                                        } else {
-                                            showError = true
-                                            errorMessage = task.exception?.message ?: "Sign up failed"
-                                        }
-                                    }
-                            }
-                        }
-                    }
-                },
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                contentPadding = PaddingValues(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(54.dp),
-                enabled = !isLoading
-            ) {
+                // LOGIN METHOD TAB
+                SectionLabel("Login Method")
+                Spacer(modifier = Modifier.height(8.dp))
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(greenGradient, RoundedCornerShape(16.dp)),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .height(46.dp)
+                        .background(Color(0xFFE0E0E0), RoundedCornerShape(50.dp))
+                        .padding(4.dp)
                 ) {
-                    Text(
-                        if (isLoading) "Creating Account..." else "Create Account",
-                        color = Color.Black,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 17.sp
+                    Row(modifier = Modifier.fillMaxSize()) {
+                        listOf(
+                            "Gmail" to Icons.Default.Email,
+                            "Mobile" to Icons.Default.Phone
+                        ).forEachIndexed { index, (label, icon) ->
+                            val isActive = selectedTab == index
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .then(
+                                        if (isActive) Modifier.background(greenGradient, RoundedCornerShape(50.dp))
+                                        else Modifier
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                TextButton(
+                                    onClick = { if (!isLoading) selectedTab = index },
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Icon(
+                                        icon,
+                                        contentDescription = null,
+                                        tint = if (isActive) Color.Black else Color.Gray,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        label,
+                                        color = if (isActive) Color.Black else Color.Gray,
+                                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // EMAIL / MOBILE INPUT
+                if (selectedTab == 0) {
+                    OutlinedTextField(
+                        value = emailInput,
+                        onValueChange = { emailInput = it },
+                        placeholder = { Text("Gmail address") },
+                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        textStyle = fieldTextStyle,
+                        shape = fieldShape,
+                        colors = signupFieldColors(),
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        enabled = !isLoading
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = mobileInput,
+                        onValueChange = { mobileInput = it },
+                        placeholder = { Text("+880 Mobile number") },
+                        leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        textStyle = fieldTextStyle,
+                        shape = fieldShape,
+                        colors = signupFieldColors(),
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        enabled = !isLoading
                     )
                 }
-            }
 
-            Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-            // TERMS
-            Text(
-                buildAnnotatedString {
-                    append("By signing up you agree to our ")
-                    withStyle(SpanStyle(color = Color(0xFF008F8F), fontWeight = FontWeight.SemiBold)) {
-                        append("Terms")
-                    }
-                    append(" & ")
-                    withStyle(SpanStyle(color = Color(0xFF008F8F), fontWeight = FontWeight.SemiBold)) {
-                        append("Privacy Policy")
-                    }
-                },
-                fontSize = 11.sp,
-                color = Color.Gray,
-                lineHeight = 16.sp
-            )
+                // PASSWORD
+                SectionLabel("Password")
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    placeholder = { Text("Create password") },
+                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    textStyle = fieldTextStyle,
+                    shape = fieldShape,
+                    colors = signupFieldColors(),
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    enabled = !isLoading
+                )
 
-            Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-            // SIGN IN ROW
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Already have an account? ", color = Color.Gray, fontSize = 13.sp)
-                TextButton(
-                    onClick = { if (!isLoading) onSignInClick() }
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it },
+                    placeholder = { Text("Confirm password") },
+                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    textStyle = fieldTextStyle,
+                    shape = fieldShape,
+                    colors = signupFieldColors(),
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    enabled = !isLoading
+                )
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                // CREATE ACCOUNT BUTTON
+                Button(
+                    onClick = {
+                        when {
+                            firstName.isBlank() || lastName.isBlank() -> {
+                                showError = true
+                                errorMessage = "Please enter your full name"
+                            }
+                            selectedTab == 0 && emailInput.isBlank() -> {
+                                showError = true
+                                errorMessage = "Please enter your email address"
+                            }
+                            selectedTab == 1 && mobileInput.isBlank() -> {
+                                showError = true
+                                errorMessage = "Please enter your mobile number"
+                            }
+                            password.isBlank() -> {
+                                showError = true
+                                errorMessage = "Please enter a password"
+                            }
+                            password != confirmPassword -> {
+                                showError = true
+                                errorMessage = "Passwords do not match"
+                            }
+                            password.length < 6 -> {
+                                showError = true
+                                errorMessage = "Password must be at least 6 characters"
+                            }
+                            else -> {
+                                showError = false
+                                isLoading = true
+
+                                val fullName = "$firstName $lastName"
+
+                                if (selectedTab == 0) {
+                                    // Email/Password Sign Up with Verification
+                                    auth.createUserWithEmailAndPassword(emailInput, password)
+                                        .addOnCompleteListener { task ->
+                                            if (task.isSuccessful) {
+                                                val user = task.result?.user
+
+                                                // Update display name
+                                                val profileUpdates = UserProfileChangeRequest.Builder()
+                                                    .setDisplayName(fullName)
+                                                    .build()
+
+                                                user?.updateProfile(profileUpdates)?.addOnCompleteListener { updateTask ->
+                                                    // Send email verification
+                                                    user?.sendEmailVerification()?.addOnCompleteListener { verifyTask ->
+                                                        isLoading = false
+                                                        if (verifyTask.isSuccessful) {
+                                                            // Sign out because email not verified yet
+                                                            auth.signOut()
+                                                            showVerificationNotice = true
+                                                        } else {
+                                                            showError = true
+                                                            errorMessage = verifyTask.exception?.message ?: "Failed to send verification email"
+                                                        }
+                                                    } ?: run {
+                                                        isLoading = false
+                                                        showError = true
+                                                        errorMessage = "Failed to send verification email"
+                                                    }
+                                                } ?: run {
+                                                    isLoading = false
+                                                    showError = true
+                                                    errorMessage = "Failed to update profile"
+                                                }
+                                            } else {
+                                                isLoading = false
+                                                showError = true
+                                                errorMessage = task.exception?.message ?: "Sign up failed"
+                                            }
+                                        }
+                                } else {
+                                    // Mobile sign up - no verification needed
+                                    val emailForMobile = "$mobileInput@mobileuser.com"
+                                    auth.createUserWithEmailAndPassword(emailForMobile, password)
+                                        .addOnCompleteListener { task ->
+                                            if (task.isSuccessful) {
+                                                val user = task.result?.user
+                                                val profileUpdates = UserProfileChangeRequest.Builder()
+                                                    .setDisplayName(fullName)
+                                                    .build()
+                                                user?.updateProfile(profileUpdates)?.addOnCompleteListener { updateTask ->
+                                                    isLoading = false
+                                                    onSignUpSuccess()
+                                                } ?: run {
+                                                    isLoading = false
+                                                    onSignUpSuccess()
+                                                }
+                                            } else {
+                                                isLoading = false
+                                                showError = true
+                                                errorMessage = task.exception?.message ?: "Sign up failed"
+                                            }
+                                        }
+                                }
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    contentPadding = PaddingValues(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp),
+                    enabled = !isLoading
                 ) {
-                    Text(
-                        "Sign In",
-                        color = Color(0xFF008F8F),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(greenGradient, RoundedCornerShape(16.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            if (isLoading) "Creating Account..." else "Create Account",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // TERMS
+                Text(
+                    buildAnnotatedString {
+                        append("By signing up you agree to our ")
+                        withStyle(SpanStyle(color = Color(0xFF008F8F), fontWeight = FontWeight.SemiBold)) {
+                            append("Terms")
+                        }
+                        append(" & ")
+                        withStyle(SpanStyle(color = Color(0xFF008F8F), fontWeight = FontWeight.SemiBold)) {
+                            append("Privacy Policy")
+                        }
+                    },
+                    fontSize = 11.sp,
+                    color = Color.Gray,
+                    lineHeight = 16.sp
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // SIGN IN ROW
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Already have an account? ", color = Color.Gray, fontSize = 13.sp)
+                    TextButton(
+                        onClick = { if (!isLoading) onSignInClick() }
+                    ) {
+                        Text(
+                            "Sign In",
+                            color = Color(0xFF008F8F),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
