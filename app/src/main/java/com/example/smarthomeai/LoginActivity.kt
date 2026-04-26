@@ -12,7 +12,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -53,9 +52,7 @@ class LoginActivity : ComponentActivity() {
 fun LoginUI() {
     val context = LocalContext.current
     val auth = Firebase.auth
-    var selectedTab by remember { mutableIntStateOf(0) }
     var emailInput by remember { mutableStateOf("") }
-    var mobileInput by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
@@ -134,135 +131,29 @@ fun LoginUI() {
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // TAB SWITCHER
-            Box(
-                modifier = Modifier
-                    .width(300.dp)
-                    .height(48.dp)
-                    .background(Color(0xFFE0E0E0), RoundedCornerShape(50.dp))
-                    .padding(4.dp)
-            ) {
-                Row(modifier = Modifier.fillMaxSize()) {
-                    // Gmail Tab
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .then(
-                                if (selectedTab == 0) Modifier.background(
-                                    greenGradient,
-                                    RoundedCornerShape(50.dp)
-                                ) else Modifier
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        TextButton(
-                            onClick = { if (!isLoading) selectedTab = 0 },
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Email,
-                                contentDescription = null,
-                                tint = if (selectedTab == 0) Color.Black else Color.Gray,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                "Gmail",
-                                color = if (selectedTab == 0) Color.Black else Color.Gray,
-                                fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-
-                    // Mobile Tab
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .then(
-                                if (selectedTab == 1) Modifier.background(
-                                    greenGradient,
-                                    RoundedCornerShape(50.dp)
-                                ) else Modifier
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        TextButton(
-                            onClick = { if (!isLoading) selectedTab = 1 },
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Phone,
-                                contentDescription = null,
-                                tint = if (selectedTab == 1) Color.Black else Color.Gray,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                "Mobile",
-                                color = if (selectedTab == 1) Color.Black else Color.Gray,
-                                fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // EMAIL / MOBILE INPUT
-            if (selectedTab == 0) {
-                OutlinedTextField(
-                    value = emailInput,
-                    onValueChange = { emailInput = it },
-                    placeholder = { Text("Gmail address", fontSize = 15.sp, color = Color.Gray) },
-                    leadingIcon = {
-                        Icon(Icons.Default.Email, contentDescription = null, tint = Color.Gray)
-                    },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    textStyle = TextStyle(color = Color.Black, fontSize = 15.sp),
-                    shape = RoundedCornerShape(50.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White,
-                        focusedBorderColor = Color(0xFF2CF46F),
-                        unfocusedBorderColor = Color(0xFFDDDDDD),
-                        focusedTextColor = Color.Black,
-                        unfocusedTextColor = Color.Black,
-                        cursorColor = Color(0xFF008F8F)
-                    ),
-                    modifier = Modifier.width(300.dp).height(58.dp),
-                    enabled = !isLoading
-                )
-            } else {
-                OutlinedTextField(
-                    value = mobileInput,
-                    onValueChange = { mobileInput = it },
-                    placeholder = { Text("Mobile number", fontSize = 15.sp, color = Color.Gray) },
-                    leadingIcon = {
-                        Icon(Icons.Default.Phone, contentDescription = null, tint = Color.Gray)
-                    },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    textStyle = TextStyle(color = Color.Black, fontSize = 15.sp),
-                    shape = RoundedCornerShape(50.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White,
-                        focusedBorderColor = Color(0xFF2CF46F),
-                        unfocusedBorderColor = Color(0xFFDDDDDD),
-                        focusedTextColor = Color.Black,
-                        unfocusedTextColor = Color.Black,
-                        cursorColor = Color(0xFF008F8F)
-                    ),
-                    modifier = Modifier.width(300.dp).height(58.dp),
-                    enabled = !isLoading
-                )
-            }
+            // EMAIL INPUT
+            OutlinedTextField(
+                value = emailInput,
+                onValueChange = { emailInput = it },
+                placeholder = { Text("Gmail address", fontSize = 15.sp, color = Color.Gray) },
+                leadingIcon = {
+                    Icon(Icons.Default.Email, contentDescription = null, tint = Color.Gray)
+                },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                textStyle = TextStyle(color = Color.Black, fontSize = 15.sp),
+                shape = RoundedCornerShape(50.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White,
+                    focusedBorderColor = Color(0xFF2CF46F),
+                    unfocusedBorderColor = Color(0xFFDDDDDD),
+                    focusedTextColor = Color.Black,
+                    unfocusedTextColor = Color.Black,
+                    cursorColor = Color(0xFF008F8F)
+                ),
+                modifier = Modifier.width(300.dp).height(58.dp),
+                enabled = !isLoading
+            )
 
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -312,13 +203,9 @@ fun LoginUI() {
             Button(
                 onClick = {
                     when {
-                        selectedTab == 0 && emailInput.isBlank() -> {
+                        emailInput.isBlank() -> {
                             showError = true
                             errorMessage = "Please enter your email address"
-                        }
-                        selectedTab == 1 && mobileInput.isBlank() -> {
-                            showError = true
-                            errorMessage = "Please enter your mobile number"
                         }
                         password.isBlank() -> {
                             showError = true
@@ -328,48 +215,30 @@ fun LoginUI() {
                             showError = false
                             isLoading = true
 
-                            if (selectedTab == 0) {
-                                // Email/Password Login with Verification Check
-                                auth.signInWithEmailAndPassword(emailInput, password)
-                                    .addOnCompleteListener { task ->
-                                        isLoading = false
-                                        if (task.isSuccessful) {
-                                            val user = auth.currentUser
+                            // Email/Password Login with Verification Check
+                            auth.signInWithEmailAndPassword(emailInput, password)
+                                .addOnCompleteListener { task ->
+                                    isLoading = false
+                                    if (task.isSuccessful) {
+                                        val user = auth.currentUser
 
-                                            // Check if email is verified
-                                            if (user?.isEmailVerified == true) {
-                                                val intent = Intent(context, HomeActivity::class.java)
-                                                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                                                context.startActivity(intent)
-                                                (context as? ComponentActivity)?.finish()
-                                            } else {
-                                                // Email not verified - sign out and show error
-                                                auth.signOut()
-                                                showError = true
-                                                errorMessage = "Please verify your email address first. Check your inbox."
-                                            }
-                                        } else {
-                                            showError = true
-                                            errorMessage = task.exception?.message ?: "Login failed"
-                                        }
-                                    }
-                            } else {
-                                // Mobile number login - no verification needed
-                                val emailForMobile = "$mobileInput@mobileuser.com"
-                                auth.signInWithEmailAndPassword(emailForMobile, password)
-                                    .addOnCompleteListener { task ->
-                                        isLoading = false
-                                        if (task.isSuccessful) {
+                                        // Check if email is verified
+                                        if (user?.isEmailVerified == true) {
                                             val intent = Intent(context, HomeActivity::class.java)
                                             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                                             context.startActivity(intent)
                                             (context as? ComponentActivity)?.finish()
                                         } else {
+                                            // Email not verified - sign out and show error
+                                            auth.signOut()
                                             showError = true
-                                            errorMessage = "Invalid mobile number or password. Please sign up first."
+                                            errorMessage = "Please verify your email address first. Check your inbox."
                                         }
+                                    } else {
+                                        showError = true
+                                        errorMessage = task.exception?.message ?: "Login failed"
                                     }
-                            }
+                                }
                         }
                     }
                 },

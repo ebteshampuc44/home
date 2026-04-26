@@ -16,7 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -83,9 +82,7 @@ fun SignupUI(
     val auth = Firebase.auth
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
-    var selectedTab by remember { mutableIntStateOf(0) }
     var emailInput by remember { mutableStateOf("") }
-    var mobileInput by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
@@ -271,92 +268,24 @@ fun SignupUI(
 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                // LOGIN METHOD TAB
-                SectionLabel("Login Method")
+                // EMAIL INPUT
+                SectionLabel("Email Address")
                 Spacer(modifier = Modifier.height(8.dp))
-                Box(
+                OutlinedTextField(
+                    value = emailInput,
+                    onValueChange = { emailInput = it },
+                    placeholder = { Text("Gmail address") },
+                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    textStyle = fieldTextStyle,
+                    shape = fieldShape,
+                    colors = signupFieldColors(),
+                    singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(46.dp)
-                        .background(Color(0xFFE0E0E0), RoundedCornerShape(50.dp))
-                        .padding(4.dp)
-                ) {
-                    Row(modifier = Modifier.fillMaxSize()) {
-                        listOf(
-                            "Gmail" to Icons.Default.Email,
-                            "Mobile" to Icons.Default.Phone
-                        ).forEachIndexed { index, (label, icon) ->
-                            val isActive = selectedTab == index
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .then(
-                                        if (isActive) Modifier.background(greenGradient, RoundedCornerShape(50.dp))
-                                        else Modifier
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                TextButton(
-                                    onClick = { if (!isLoading) selectedTab = index },
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentPadding = PaddingValues(0.dp)
-                                ) {
-                                    Icon(
-                                        icon,
-                                        contentDescription = null,
-                                        tint = if (isActive) Color.Black else Color.Gray,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        label,
-                                        color = if (isActive) Color.Black else Color.Gray,
-                                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                                        fontSize = 13.sp
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // EMAIL / MOBILE INPUT
-                if (selectedTab == 0) {
-                    OutlinedTextField(
-                        value = emailInput,
-                        onValueChange = { emailInput = it },
-                        placeholder = { Text("Gmail address") },
-                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                        textStyle = fieldTextStyle,
-                        shape = fieldShape,
-                        colors = signupFieldColors(),
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        enabled = !isLoading
-                    )
-                } else {
-                    OutlinedTextField(
-                        value = mobileInput,
-                        onValueChange = { mobileInput = it },
-                        placeholder = { Text("+880 Mobile number") },
-                        leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                        textStyle = fieldTextStyle,
-                        shape = fieldShape,
-                        colors = signupFieldColors(),
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        enabled = !isLoading
-                    )
-                }
+                        .height(56.dp),
+                    enabled = !isLoading
+                )
 
                 Spacer(modifier = Modifier.height(18.dp))
 
@@ -409,13 +338,9 @@ fun SignupUI(
                                 showError = true
                                 errorMessage = "Please enter your full name"
                             }
-                            selectedTab == 0 && emailInput.isBlank() -> {
+                            emailInput.isBlank() -> {
                                 showError = true
                                 errorMessage = "Please enter your email address"
-                            }
-                            selectedTab == 1 && mobileInput.isBlank() -> {
-                                showError = true
-                                errorMessage = "Please enter your mobile number"
                             }
                             password.isBlank() -> {
                                 showError = true
@@ -435,70 +360,45 @@ fun SignupUI(
 
                                 val fullName = "$firstName $lastName"
 
-                                if (selectedTab == 0) {
-                                    // Email/Password Sign Up with Verification
-                                    auth.createUserWithEmailAndPassword(emailInput, password)
-                                        .addOnCompleteListener { task ->
-                                            if (task.isSuccessful) {
-                                                val user = task.result?.user
+                                // Email/Password Sign Up with Verification
+                                auth.createUserWithEmailAndPassword(emailInput, password)
+                                    .addOnCompleteListener { task ->
+                                        if (task.isSuccessful) {
+                                            val user = task.result?.user
 
-                                                // Update display name
-                                                val profileUpdates = UserProfileChangeRequest.Builder()
-                                                    .setDisplayName(fullName)
-                                                    .build()
+                                            // Update display name
+                                            val profileUpdates = UserProfileChangeRequest.Builder()
+                                                .setDisplayName(fullName)
+                                                .build()
 
-                                                user?.updateProfile(profileUpdates)?.addOnCompleteListener { updateTask ->
-                                                    // Send email verification
-                                                    user?.sendEmailVerification()?.addOnCompleteListener { verifyTask ->
-                                                        isLoading = false
-                                                        if (verifyTask.isSuccessful) {
-                                                            // Sign out because email not verified yet
-                                                            auth.signOut()
-                                                            showVerificationNotice = true
-                                                        } else {
-                                                            showError = true
-                                                            errorMessage = verifyTask.exception?.message ?: "Failed to send verification email"
-                                                        }
-                                                    } ?: run {
-                                                        isLoading = false
+                                            user?.updateProfile(profileUpdates)?.addOnCompleteListener { updateTask ->
+                                                // Send email verification
+                                                user?.sendEmailVerification()?.addOnCompleteListener { verifyTask ->
+                                                    isLoading = false
+                                                    if (verifyTask.isSuccessful) {
+                                                        // Sign out because email not verified yet
+                                                        auth.signOut()
+                                                        showVerificationNotice = true
+                                                    } else {
                                                         showError = true
-                                                        errorMessage = "Failed to send verification email"
+                                                        errorMessage = verifyTask.exception?.message ?: "Failed to send verification email"
                                                     }
                                                 } ?: run {
                                                     isLoading = false
                                                     showError = true
-                                                    errorMessage = "Failed to update profile"
+                                                    errorMessage = "Failed to send verification email"
                                                 }
-                                            } else {
+                                            } ?: run {
                                                 isLoading = false
                                                 showError = true
-                                                errorMessage = task.exception?.message ?: "Sign up failed"
+                                                errorMessage = "Failed to update profile"
                                             }
+                                        } else {
+                                            isLoading = false
+                                            showError = true
+                                            errorMessage = task.exception?.message ?: "Sign up failed"
                                         }
-                                } else {
-                                    // Mobile sign up - no verification needed
-                                    val emailForMobile = "$mobileInput@mobileuser.com"
-                                    auth.createUserWithEmailAndPassword(emailForMobile, password)
-                                        .addOnCompleteListener { task ->
-                                            if (task.isSuccessful) {
-                                                val user = task.result?.user
-                                                val profileUpdates = UserProfileChangeRequest.Builder()
-                                                    .setDisplayName(fullName)
-                                                    .build()
-                                                user?.updateProfile(profileUpdates)?.addOnCompleteListener { updateTask ->
-                                                    isLoading = false
-                                                    onSignUpSuccess()
-                                                } ?: run {
-                                                    isLoading = false
-                                                    onSignUpSuccess()
-                                                }
-                                            } else {
-                                                isLoading = false
-                                                showError = true
-                                                errorMessage = task.exception?.message ?: "Sign up failed"
-                                            }
-                                        }
-                                }
+                                    }
                             }
                         }
                     },
