@@ -160,9 +160,13 @@ fun HomeScreen() {
             // ── 1. TOP BAR ─────────────────────────────────
             TopBar(
                 userName         = userName,
-                onProfileClick   = { },
+                onProfileClick   = {
+                    context.startActivity(Intent(context, ProfileActivity::class.java))
+                },
                 onLogoutClick    = { showLogoutDialog = true },
-                onNotifClick     = { }
+                onNotifClick     = {
+                    context.startActivity(Intent(context, NotificationActivity::class.java))
+                }
             )
 
             // ── 2. GREETING BANNER ─────────────────────────
@@ -678,7 +682,7 @@ fun DeviceStatusCard(
 }
 
 // ─────────────────────────────────────────────────────────────
-//  FEATURES GRID WITH DEVICE CONTROL NAVIGATION
+//  FEATURES GRID WITH ALL NAVIGATION
 // ─────────────────────────────────────────────────────────────
 @Composable
 fun FeaturesSection(context: android.content.Context) {
@@ -737,25 +741,31 @@ fun FeaturesSection(context: android.content.Context) {
                 title       = "Islamic",
                 subtitle    = "Prayer & Quran",
                 accentColor = IslamicTeal,
-                onClick     = { }
+                onClick     = {
+                    context.startActivity(Intent(context, IslamicFeatureActivity::class.java))
+                }
             )
             FeatureCard(
                 modifier    = Modifier.weight(1f),
-                icon        = Icons.Default.NotificationsActive,
+                icon        = Icons.Default.Notifications,
                 title       = "Notifications",
                 subtitle    = "All alerts",
                 accentColor = PurpleAccent,
-                onClick     = { }
+                onClick     = {
+                    context.startActivity(Intent(context, NotificationActivity::class.java))
+                }
             )
         }
-        // Full-width Profile card
+        // Profile Settings Card - Full width
         FeatureCard(
             modifier    = Modifier.fillMaxWidth(),
             icon        = Icons.Default.Person,
             title       = "Profile Settings",
             subtitle    = "Account & preferences",
             accentColor = Color(0xFF888888),
-            onClick     = { }
+            onClick     = {
+                context.startActivity(Intent(context, ProfileActivity::class.java))
+            }
         )
     }
 }

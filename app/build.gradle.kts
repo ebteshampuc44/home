@@ -6,12 +6,12 @@ plugins {
 
 android {
     namespace = "com.example.smarthomeai"
-    compileSdk = 36  // আপডেট করা হয়েছে 36 এ
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.smarthomeai"
         minSdk = 24
-        targetSdk = 36  // আপডেট করা হয়েছে 36 এ
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
@@ -45,12 +45,28 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation("androidx.compose.material:material-icons-extended:1.7.5")
-    implementation("com.google.firebase:firebase-database-ktx:20.3.0")
 
-    // Firebase
+    // Material Icons Extended
+    implementation("androidx.compose.material:material-icons-extended:1.7.5")
+
+    // Firebase Database
+    implementation("com.google.firebase:firebase-database-ktx:20.3.0")
+    dependencies {
+        implementation("io.coil-kt:coil-compose:2.6.0")
+
+
+        // Firebase Storage
+        implementation("com.google.firebase:firebase-storage-ktx")
+    }
+
+    // Firebase BOM (Bill of Materials)
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+
+    // Firebase Authentication
     implementation("com.google.firebase:firebase-auth-ktx")
+
+    // Coil for image loading
+    implementation("io.coil-kt:coil-compose:2.6.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
