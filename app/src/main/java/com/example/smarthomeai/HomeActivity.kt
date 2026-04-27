@@ -715,7 +715,9 @@ fun FeaturesSection(context: android.content.Context) {
                 title       = "Energy",
                 subtitle    = "Monitor usage",
                 accentColor = YellowAccent,
-                onClick     = { }
+                onClick     = {
+                    context.startActivity(Intent(context, EnergyActivity::class.java))
+                }
             )
             FeatureCard(
                 modifier    = Modifier.weight(1f),
@@ -723,7 +725,9 @@ fun FeaturesSection(context: android.content.Context) {
                 title       = "Emergency",
                 subtitle    = "SOS & alerts",
                 accentColor = EmergencyRed,
-                onClick     = { }
+                onClick     = {
+                    context.startActivity(Intent(context, EmergencyActivity::class.java))
+                }
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

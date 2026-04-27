@@ -41,6 +41,12 @@
         <activity
             android:name=".AutomationActivity"
             android:exported="false" />
+        <activity
+            android:name=".EnergyActivity"
+            android:exported="false" />
+        <activity
+            android:name=".EmergencyActivity"
+            android:exported="false" />
 
     </application>
 
