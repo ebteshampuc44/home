@@ -83,10 +83,10 @@ fun HomeScreen() {
     var showLogoutDialog  by remember { mutableStateOf(false) }
 
     // Device states - সব ডিভাইস অফ থাকবে শুরুতে
-    var lampOn    by remember { mutableStateOf(false) }  // আগে true ছিল, এখন false
+    var lampOn    by remember { mutableStateOf(false) }
     var fanOn     by remember { mutableStateOf(false) }
     var acOn      by remember { mutableStateOf(false) }
-    var cctvOn    by remember { mutableStateOf(false) }  // আগে true ছিল, এখন false
+    var cctvOn    by remember { mutableStateOf(false) }
 
     // Real temperature state
     var currentTemperature by remember { mutableStateOf(28.5f) }
@@ -207,7 +207,7 @@ fun HomeScreen() {
 
             // ── 5. FEATURES GRID ───────────────────────────
             SectionHeader(title = "🧩 Features")
-            FeaturesSection()
+            FeaturesSection(context = context)
 
             Spacer(modifier = Modifier.height(8.dp))
         }
@@ -678,10 +678,10 @@ fun DeviceStatusCard(
 }
 
 // ─────────────────────────────────────────────────────────────
-//  FEATURES GRID
+//  FEATURES GRID WITH DEVICE CONTROL NAVIGATION
 // ─────────────────────────────────────────────────────────────
 @Composable
-fun FeaturesSection() {
+fun FeaturesSection(context: android.content.Context) {
     Column(
         modifier = Modifier.padding(horizontal = 18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -693,7 +693,9 @@ fun FeaturesSection() {
                 title       = "Device Control",
                 subtitle    = "Manage all",
                 accentColor = GreenAccent,
-                onClick     = { }
+                onClick     = {
+                    context.startActivity(Intent(context, DeviceControlActivity::class.java))
+                }
             )
             FeatureCard(
                 modifier    = Modifier.weight(1f),
@@ -701,7 +703,9 @@ fun FeaturesSection() {
                 title       = "Automation",
                 subtitle    = "Smart rules",
                 accentColor = BlueAccent,
-                onClick     = { }
+                onClick     = {
+                    context.startActivity(Intent(context, AutomationActivity::class.java))
+                }
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
