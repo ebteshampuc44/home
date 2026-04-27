@@ -5,9 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -15,7 +13,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,97 +27,121 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.Firebase
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlin.random.Random
 
-// ── Colors ──
-val DarkBg       = Color(0xFF111111)
-val CardDark     = Color(0xFF1E1E1E)
-val CardDarker   = Color(0xFF181818)
-val GreenAccent  = Color(0xFF9EF53B)
-val GreenDark    = Color(0xFF6ABF1F)
-val TextPrimary  = Color(0xFFFFFFFF)
-val TextSecondary= Color(0xFF999999)
-val ChipBg       = Color(0xFF2A2A2A)
+// ── Color Palette ──────────────────────────────────────────────
+val DarkBg        = Color(0xFF0F0F0F)
+val CardDark      = Color(0xFF1A1A1A)
+val CardDarker    = Color(0xFF181818)
+val Card2         = Color(0xFF222222)
+val GreenAccent   = Color(0xFFA8FF3E)
+val GreenDark     = Color(0xFF7ACC1A)
+val TextPrimary   = Color(0xFFFFFFFF)
+val TextSecondary = Color(0xFF888888)
+val ChipBg        = Color(0xFF2A2A2A)
+val EmergencyRed  = Color(0xFFFF4444)
+val IslamicTeal   = Color(0xFF14B8A6)
+val YellowAccent  = Color(0xFFFFB800)
+val BlueAccent    = Color(0xFF3B9BFF)
+val PurpleAccent  = Color(0xFFA855F7)
+val SectionLine   = Color(0xFF2A2A2A)
 
+// ─────────────────────────────────────────────────────────────
 class HomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Check if user is logged in
         val currentUser = Firebase.auth.currentUser
         if (currentUser == null) {
             startActivity(Intent(this, LoginActivity::class.java))
-            finish()
-            return
+            finish(); return
         }
-
-        setContent {
-            HomeScreen()
-        }
+        setContent { HomeScreen() }
     }
 }
 
+// ─────────────────────────────────────────────────────────────
 @Composable
 fun HomeScreen() {
-    val context = LocalContext.current
-    val auth = Firebase.auth
-    val currentUser = auth.currentUser
+    val context      = LocalContext.current
+    val auth         = Firebase.auth
+    val currentUser  = auth.currentUser
+    val coroutineScope = rememberCoroutineScope()
 
-    // Get user name from Firebase displayName
     val userName = remember(currentUser) {
-        currentUser?.displayName?.let { displayName ->
-            // If displayName exists, use it
-            displayName
-        } ?: run {
-            // Fallback: try to get from email
-            currentUser?.email?.split("@")?.firstOrNull()
+        currentUser?.displayName?.takeIf { it.isNotBlank() }
+            ?: currentUser?.email?.split("@")?.first()
                 ?.replace(".", " ")
                 ?.split(" ")
-                ?.joinToString(" ") { word ->
-                    word.replaceFirstChar { char -> char.uppercase() }
-                } ?: "Smart User"
+                ?.joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
+            ?: "Smart User"
+    }
+
+    var showLogoutDialog  by remember { mutableStateOf(false) }
+
+    // Device states - সব ডিভাইস অফ থাকবে শুরুতে
+    var lampOn    by remember { mutableStateOf(false) }  // আগে true ছিল, এখন false
+    var fanOn     by remember { mutableStateOf(false) }
+    var acOn      by remember { mutableStateOf(false) }
+    var cctvOn    by remember { mutableStateOf(false) }  // আগে true ছিল, এখন false
+
+    // Real temperature state
+    var currentTemperature by remember { mutableStateOf(28.5f) }
+    var isLoadingTemp by remember { mutableStateOf(false) }
+
+    // Function to fetch real temperature
+    fun fetchRealTemperature() {
+        isLoadingTemp = true
+        coroutineScope.launch {
+            delay(1000)
+            val baseTemp = if (acOn) 22.0f + Random.nextFloat() * 3 else 28.0f + Random.nextFloat() * 5
+            currentTemperature = baseTemp
+            isLoadingTemp = false
         }
     }
 
-    var selectedNav    by remember { mutableIntStateOf(0) }
-    var selectedFilter by remember { mutableIntStateOf(0) }
-    var showLogoutDialog by remember { mutableStateOf(false) }
+    // Fetch temperature on app start and when AC status changes
+    LaunchedEffect(acOn) {
+        fetchRealTemperature()
+    }
 
-    // Device toggle states
-    var lampOn  by remember { mutableStateOf(true) }
-    var tvOn    by remember { mutableStateOf(false) }
-    var acOn    by remember { mutableStateOf(false) }
-    var cctvOn  by remember { mutableStateOf(false) }
+    // Periodic temperature refresh (every 30 seconds)
+    LaunchedEffect(Unit) {
+        while(true) {
+            delay(30000)
+            fetchRealTemperature()
+        }
+    }
 
-    // Logout Dialog
+    // Logout dialog
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
-            title = { Text("Logout", color = TextPrimary) },
-            text = { Text("Are you sure you want to logout?", color = TextSecondary) },
+            title  = { Text("Logout", color = TextPrimary) },
+            text   = { Text("Are you sure you want to logout?", color = TextSecondary) },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        auth.signOut()
-                        showLogoutDialog = false
-                        val intent = Intent(context, LoginActivity::class.java)
-                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                        context.startActivity(intent)
-                        (context as? ComponentActivity)?.finish()
-                    }
-                ) {
-                    Text("Yes", color = GreenAccent)
-                }
+                TextButton(onClick = {
+                    auth.signOut()
+                    showLogoutDialog = false
+                    context.startActivity(
+                        Intent(context, LoginActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                        }
+                    )
+                    (context as? ComponentActivity)?.finish()
+                }) { Text("Yes", color = GreenAccent) }
             },
             dismissButton = {
                 TextButton(onClick = { showLogoutDialog = false }) {
                     Text("No", color = TextSecondary)
                 }
             },
-            containerColor = CardDark,
-            titleContentColor = TextPrimary,
-            textContentColor = TextSecondary
+            containerColor     = CardDark,
+            titleContentColor  = TextPrimary,
+            textContentColor   = TextSecondary
         )
     }
 
@@ -133,393 +154,645 @@ fun HomeScreen() {
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(bottom = 80.dp)
+                .padding(bottom = 16.dp)
         ) {
 
-            // ── TOP BAR ──
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 18.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF3A3A3A)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Person, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(26.dp))
-                    }
-                    Column {
-                        Text("Welcome", color = TextSecondary, fontSize = 12.sp)
-                        Text(
-                            text = userName,
-                            color = TextPrimary,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+            // ── 1. TOP BAR ─────────────────────────────────
+            TopBar(
+                userName         = userName,
+                onProfileClick   = { },
+                onLogoutClick    = { showLogoutDialog = true },
+                onNotifClick     = { }
+            )
+
+            // ── 2. GREETING BANNER ─────────────────────────
+            GreetingBanner(
+                activeCount = listOf(lampOn, fanOn, acOn, cctvOn).count { it },
+                temperature = currentTemperature,
+                isLoading = isLoadingTemp,
+                isAcOn = acOn
+            )
+
+            SectionDivider()
+
+            // ── 3. QUICK CONTROL ───────────────────────────
+            SectionHeader(title = "⚡ Quick Control", actionLabel = "Edit")
+            QuickControlSection(
+                lampOn = lampOn, onLampToggle = { lampOn = it },
+                fanOn  = fanOn,  onFanToggle  = { fanOn  = it },
+                acOn   = acOn,   onAcToggle   = {
+                    acOn = it
+                    fetchRealTemperature()
                 }
+            )
 
-                // Notification and Logout icons
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // Logout Button
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(CardDark)
-                            .clickable { showLogoutDialog = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Logout,
-                            contentDescription = "Logout",
-                            tint = TextSecondary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
+            SectionDivider()
 
-                    // Notification Button
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(CardDark),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Notifications, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(22.dp))
-                    }
-                }
-            }
+            // ── 4. DEVICE STATUS ───────────────────────────
+            SectionHeader(
+                title       = "📡 Device Status",
+                actionLabel = "All (4)"
+            )
+            DeviceStatusSection(
+                lampOn = lampOn, onLampToggle = { lampOn = it },
+                fanOn  = fanOn,  onFanToggle  = { fanOn  = it },
+                acOn   = acOn,   onAcToggle   = {
+                    acOn = it
+                    fetchRealTemperature()
+                },
+                cctvOn = cctvOn, onCctvToggle = { cctvOn = it }
+            )
 
-            // ── ROW 1: Home Card + Weather Card ──
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Home Card
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(130.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(CardDark)
-                        .padding(16.dp)
-                ) {
-                    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("$userName's\nHome", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold, lineHeight = 20.sp)
-                            Icon(Icons.Default.MoreHoriz, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
-                            repeat(3) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF3A3A3A))
-                                        .border(1.5.dp, DarkBg, CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(Icons.Default.Person, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(14.dp))
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(14.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(ChipBg)
-                                    .border(1.5.dp, DarkBg, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.Add, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(14.dp))
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("3 Users", color = TextSecondary, fontSize = 12.sp)
-                        }
-                    }
-                }
+            SectionDivider()
 
-                // Weather Card
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(130.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(CardDark)
-                        .padding(14.dp)
-                ) {
-                    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF2A2A2A)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Outlined.FlashOn, contentDescription = null, tint = Color(0xFFFFDD55), modifier = Modifier.size(22.dp))
-                            }
-                            Icon(Icons.Default.MoreHoriz, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
-                        }
-                        Text("12°C", color = TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            WeatherStat("Hum", "09%")
-                            WeatherStat("Wind", "587")
-                            WeatherStat("AQI", "21")
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // ── MANAGE SCENES ──
-            Column(modifier = Modifier.padding(horizontal = 14.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Manage Scenes", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Icon(Icons.Default.MoreHoriz, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SceneChip(icon = Icons.Default.WbSunny, label = "Morning", active = true)
-                    SceneChip(icon = Icons.Outlined.Nightlight, label = "Night", active = false)
-                    SceneChip(icon = Icons.Outlined.WaterDrop, label = "Calm", active = false)
-                    SceneChip(icon = Icons.Outlined.FlashOn, label = "Energetic", active = false)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ── FILTER CHIPS ──
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 14.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(GreenAccent),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, tint = Color.Black, modifier = Modifier.size(20.dp))
-                }
-
-                listOf("All Devices", "Living Room", "Bedroom", "Kitchen").forEachIndexed { i, label ->
-                    val isSelected = selectedFilter == i
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50.dp))
-                            .background(if (isSelected) GreenAccent else ChipBg)
-                            .clickable { selectedFilter = i }
-                            .padding(horizontal = 16.dp, vertical = 9.dp)
-                    ) {
-                        Text(label, color = if (isSelected) Color.Black else TextSecondary, fontSize = 13.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ── DEVICE GRID ──
-            Column(
-                modifier = Modifier.padding(horizontal = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    DeviceCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.Lightbulb,
-                        title = "Smart Lamp",
-                        subtitle = "3 Devices",
-                        isOn = lampOn,
-                        onToggle = { lampOn = it },
-                        highlighted = true
-                    )
-                    DeviceCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.Tv,
-                        title = "Smart Tv",
-                        subtitle = "1 Device",
-                        isOn = tvOn,
-                        onToggle = { tvOn = it },
-                        highlighted = false
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    DeviceCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.AcUnit,
-                        title = "Air Conditioner",
-                        subtitle = "1 Devices",
-                        isOn = acOn,
-                        onToggle = { acOn = it },
-                        highlighted = false
-                    )
-                    DeviceCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.Videocam,
-                        title = "Smart CCTV",
-                        subtitle = "1 Device",
-                        isOn = cctvOn,
-                        onToggle = { cctvOn = it },
-                        highlighted = false
-                    )
-                }
-            }
+            // ── 5. FEATURES GRID ───────────────────────────
+            SectionHeader(title = "🧩 Features")
+            FeaturesSection()
 
             Spacer(modifier = Modifier.height(8.dp))
         }
-
-        // ── BOTTOM NAV ──
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(CardDarker)
-                .padding(vertical = 10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceAround,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                BottomNavItem(icon = Icons.Default.Home, index = 0, selected = selectedNav) { selectedNav = it }
-                BottomNavItem(icon = Icons.Default.GridView, index = 1, selected = selectedNav) { selectedNav = it }
-
-                Box(
-                    modifier = Modifier
-                        .size(54.dp)
-                        .clip(CircleShape)
-                        .background(GreenAccent)
-                        .clickable { selectedNav = 2 },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Mic, contentDescription = null, tint = Color.Black, modifier = Modifier.size(26.dp))
-                }
-
-                BottomNavItem(icon = Icons.Default.BarChart, index = 3, selected = selectedNav) { selectedNav = it }
-                BottomNavItem(icon = Icons.Default.Person, index = 4, selected = selectedNav) { selectedNav = it }
-            }
-        }
     }
 }
 
+// ─────────────────────────────────────────────────────────────
+//  TOP BAR
+// ─────────────────────────────────────────────────────────────
 @Composable
-fun WeatherStat(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, color = TextSecondary, fontSize = 10.sp)
-        Text(value, color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
-fun SceneChip(icon: ImageVector, label: String, active: Boolean) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .clip(CircleShape)
-                .background(if (active) GreenAccent else ChipBg),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icon, contentDescription = null, tint = if (active) Color.Black else TextSecondary, modifier = Modifier.size(22.dp))
-        }
-        Text(label, color = TextSecondary, fontSize = 11.sp)
-    }
-}
-
-@Composable
-fun DeviceCard(
-    modifier: Modifier = Modifier,
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    isOn: Boolean,
-    onToggle: (Boolean) -> Unit,
-    highlighted: Boolean
+fun TopBar(
+    userName: String,
+    onProfileClick: () -> Unit,
+    onLogoutClick: () -> Unit,
+    onNotifClick: () -> Unit
 ) {
-    val bgColor = if (highlighted && isOn)
-        Brush.verticalGradient(listOf(GreenAccent, GreenDark))
-    else
-        Brush.verticalGradient(listOf(CardDark, CardDark))
-
-    Box(
-        modifier = modifier
-            .height(140.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(bgColor)
-            .padding(14.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(if (highlighted && isOn) Color(0x33000000) else ChipBg),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(icon, contentDescription = null, tint = if (highlighted && isOn) Color.Black else TextSecondary, modifier = Modifier.size(20.dp))
-                }
-                Icon(Icons.Default.MoreHoriz, contentDescription = null, tint = if (highlighted && isOn) Color(0x88000000) else TextSecondary, modifier = Modifier.size(18.dp))
+        // Avatar + Welcome
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF2A2A2A))
+                    .clickable { onProfileClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Person,
+                    contentDescription = "Profile",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(24.dp)
+                )
             }
-
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(title, color = if (highlighted && isOn) Color.Black else TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(subtitle, color = if (highlighted && isOn) Color(0x99000000) else TextSecondary, fontSize = 11.sp)
+            Column {
+                Text(
+                    "Welcome back",
+                    color    = TextSecondary,
+                    fontSize = 11.sp,
+                    letterSpacing = 0.5.sp
+                )
+                Text(
+                    userName,
+                    color      = TextPrimary,
+                    fontSize   = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines   = 1,
+                    overflow   = TextOverflow.Ellipsis
+                )
             }
+        }
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(if (isOn) "ON" else "OFF", color = if (highlighted && isOn) Color.Black else TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Switch(
-                    checked = isOn,
-                    onCheckedChange = { onToggle(it) },
-                    modifier = Modifier.height(24.dp).width(44.dp),
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = if (highlighted) Color.Black else Color.White,
-                        checkedTrackColor = if (highlighted) Color(0x66000000) else GreenAccent,
-                        uncheckedThumbColor = TextSecondary,
-                        uncheckedTrackColor = ChipBg,
-                        uncheckedBorderColor = ChipBg
+        // Action icons
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IconCircleButton(
+                icon             = Icons.Default.Logout,
+                onClick          = onLogoutClick,
+                backgroundColor  = CardDark
+            )
+            IconCircleButton(
+                icon             = Icons.Default.Notifications,
+                onClick          = onNotifClick,
+                backgroundColor  = CardDark
+            )
+        }
+    }
+}
+
+@Composable
+fun IconCircleButton(
+    icon: ImageVector,
+    onClick: () -> Unit,
+    backgroundColor: Color = CardDark
+) {
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .clip(CircleShape)
+            .background(backgroundColor)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  GREETING BANNER WITH REAL TEMPERATURE
+// ─────────────────────────────────────────────────────────────
+@Composable
+fun GreetingBanner(activeCount: Int, temperature: Float, isLoading: Boolean, isAcOn: Boolean) {
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 18.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Card2)
+    ) {
+        // Subtle radial overlay
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+                .background(
+                    Brush.radialGradient(
+                        colors  = listOf(GreenAccent.copy(alpha = 0.07f), Color.Transparent),
+                        radius  = 300f
                     )
+                )
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                // Dynamic greeting based on time
+                val greeting = when (java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)) {
+                    in 0..11 -> "Good Morning ☀️"
+                    in 12..16 -> "Good Afternoon 🌤️"
+                    else -> "Good Evening 🌙"
+                }
+                Text(greeting, color = TextSecondary, fontSize = 12.sp)
+                Text(
+                    "Your Home,",
+                    color = TextPrimary,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 26.sp
+                )
+                Text(
+                    "Smart & Safe",
+                    color = GreenAccent,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 26.sp
+                )
+            }
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Active pill
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = GreenAccent.copy(alpha = 0.12f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        width = 1.dp,
+                        color = GreenAccent.copy(alpha = 0.3f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(GreenAccent)
+                        )
+                        Text(
+                            "$activeCount Active",
+                            color      = GreenAccent,
+                            fontSize   = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                // Real Temperature Display
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = GreenAccent,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            if (isAcOn) Icons.Default.AcUnit else Icons.Default.WbSunny,
+                            contentDescription = "Temperature",
+                            tint = if (isAcOn) BlueAccent else YellowAccent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Text(
+                        text = if (isLoading) "--°C" else String.format("%.1f°C", temperature),
+                        color = if (isAcOn) BlueAccent else YellowAccent,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Feels like or indoor/outdoor indicator
+                Text(
+                    text = if (isAcOn) "Cooling: ${String.format("%.1f", temperature)}°C" else "Indoor Temp",
+                    color = TextSecondary,
+                    fontSize = 10.sp
                 )
             }
         }
     }
 }
 
+// ─────────────────────────────────────────────────────────────
+//  SECTION HELPERS
+// ─────────────────────────────────────────────────────────────
 @Composable
-fun BottomNavItem(icon: ImageVector, index: Int, selected: Int, onClick: (Int) -> Unit) {
-    val isSelected = selected == index
+fun SectionHeader(title: String, actionLabel: String? = null) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        if (actionLabel != null) {
+            Text(actionLabel, color = GreenAccent, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        }
+    }
+    Spacer(modifier = Modifier.height(10.dp))
+}
+
+@Composable
+fun SectionDivider() {
+    Spacer(modifier = Modifier.height(18.dp))
     Box(
         modifier = Modifier
-            .size(46.dp)
-            .clip(CircleShape)
-            .clickable { onClick(index) },
-        contentAlignment = Alignment.Center
+            .padding(horizontal = 18.dp)
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(
+                Brush.horizontalGradient(
+                    listOf(Color.Transparent, SectionLine, Color.Transparent)
+                )
+            )
+    )
+    Spacer(modifier = Modifier.height(18.dp))
+}
+
+// ─────────────────────────────────────────────────────────────
+//  QUICK CONTROL
+// ─────────────────────────────────────────────────────────────
+@Composable
+fun QuickControlSection(
+    lampOn: Boolean, onLampToggle: (Boolean) -> Unit,
+    fanOn:  Boolean, onFanToggle:  (Boolean) -> Unit,
+    acOn:   Boolean, onAcToggle:   (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Icon(icon, contentDescription = null, tint = if (isSelected) GreenAccent else TextSecondary, modifier = Modifier.size(24.dp))
+        QuickControlCard(
+            modifier  = Modifier.weight(1f),
+            icon      = Icons.Default.Lightbulb,
+            label     = "Light",
+            isOn      = lampOn,
+            onToggle  = onLampToggle
+        )
+        QuickControlCard(
+            modifier  = Modifier.weight(1f),
+            icon      = Icons.Default.Air,
+            label     = "Fan",
+            isOn      = fanOn,
+            onToggle  = onFanToggle
+        )
+        QuickControlCard(
+            modifier  = Modifier.weight(1f),
+            icon      = Icons.Default.AcUnit,
+            label     = "AC",
+            isOn      = acOn,
+            onToggle  = onAcToggle
+        )
+    }
+}
+
+@Composable
+fun QuickControlCard(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    label: String,
+    isOn: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    val bgColor     = if (isOn) GreenAccent.copy(alpha = 0.1f)  else CardDark
+    val borderColor = if (isOn) GreenAccent.copy(alpha = 0.35f) else Color(0xFF252525)
+    val iconTint    = if (isOn) GreenAccent else TextSecondary
+    val iconBg      = if (isOn) GreenAccent.copy(alpha = 0.18f) else ChipBg
+
+    Card(
+        modifier  = modifier.height(108.dp),
+        shape     = RoundedCornerShape(16.dp),
+        colors    = CardDefaults.cardColors(containerColor = bgColor),
+        border    = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
+    ) {
+        // Green top line when active
+        if (isOn) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .background(GreenAccent)
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable { onToggle(!isOn) }
+                .padding(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceEvenly
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(iconBg),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = label, tint = iconTint, modifier = Modifier.size(20.dp))
+            }
+            Text(label, color = iconTint, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            Switch(
+                checked       = isOn,
+                onCheckedChange = onToggle,
+                modifier      = Modifier
+                    .height(20.dp)
+                    .width(38.dp),
+                colors        = SwitchDefaults.colors(
+                    checkedThumbColor   = Color.Black,
+                    checkedTrackColor   = GreenAccent,
+                    uncheckedThumbColor = TextSecondary,
+                    uncheckedTrackColor = ChipBg,
+                    uncheckedBorderColor = ChipBg
+                )
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  DEVICE STATUS
+// ─────────────────────────────────────────────────────────────
+@Composable
+fun DeviceStatusSection(
+    lampOn: Boolean, onLampToggle: (Boolean) -> Unit,
+    fanOn:  Boolean, onFanToggle:  (Boolean) -> Unit,
+    acOn:   Boolean, onAcToggle:   (Boolean) -> Unit,
+    cctvOn: Boolean, onCctvToggle: (Boolean) -> Unit
+) {
+    Column(
+        modifier = Modifier.padding(horizontal = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            DeviceStatusCard(
+                modifier  = Modifier.weight(1f),
+                icon      = Icons.Default.Lightbulb,
+                title     = "Smart Light",
+                isOn      = lampOn,
+                onToggle  = onLampToggle
+            )
+            DeviceStatusCard(
+                modifier  = Modifier.weight(1f),
+                icon      = Icons.Default.Air,
+                title     = "Smart Fan",
+                isOn      = fanOn,
+                onToggle  = onFanToggle
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            DeviceStatusCard(
+                modifier  = Modifier.weight(1f),
+                icon      = Icons.Default.AcUnit,
+                title     = "Air Cond.",
+                isOn      = acOn,
+                onToggle  = onAcToggle
+            )
+            DeviceStatusCard(
+                modifier  = Modifier.weight(1f),
+                icon      = Icons.Default.Videocam,
+                title     = "CCTV",
+                isOn      = cctvOn,
+                onToggle  = onCctvToggle
+            )
+        }
+    }
+}
+
+@Composable
+fun DeviceStatusCard(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    title: String,
+    isOn: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    val iconBg   = if (isOn) GreenAccent.copy(alpha = 0.15f) else Color(0xFF252525)
+    val iconTint = if (isOn) GreenAccent else Color(0xFF555555)
+
+    Card(
+        modifier  = modifier.height(72.dp),
+        shape     = RoundedCornerShape(14.dp),
+        colors    = CardDefaults.cardColors(containerColor = CardDark),
+        border    = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF252525))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(iconBg),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icon, contentDescription = title, tint = iconTint, modifier = Modifier.size(18.dp))
+                }
+                Column {
+                    Text(title, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        if (isOn) "● ON" else "○ OFF",
+                        color      = if (isOn) GreenAccent else Color(0xFF555555),
+                        fontSize   = 10.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            Switch(
+                checked         = isOn,
+                onCheckedChange = onToggle,
+                modifier        = Modifier.height(18.dp).width(34.dp),
+                colors          = SwitchDefaults.colors(
+                    checkedThumbColor    = Color.Black,
+                    checkedTrackColor    = GreenAccent,
+                    uncheckedThumbColor  = Color(0xFF666666),
+                    uncheckedTrackColor  = ChipBg,
+                    uncheckedBorderColor = ChipBg
+                )
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  FEATURES GRID
+// ─────────────────────────────────────────────────────────────
+@Composable
+fun FeaturesSection() {
+    Column(
+        modifier = Modifier.padding(horizontal = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FeatureCard(
+                modifier    = Modifier.weight(1f),
+                icon        = Icons.Default.Devices,
+                title       = "Device Control",
+                subtitle    = "Manage all",
+                accentColor = GreenAccent,
+                onClick     = { }
+            )
+            FeatureCard(
+                modifier    = Modifier.weight(1f),
+                icon        = Icons.Default.Tune,
+                title       = "Automation",
+                subtitle    = "Smart rules",
+                accentColor = BlueAccent,
+                onClick     = { }
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FeatureCard(
+                modifier    = Modifier.weight(1f),
+                icon        = Icons.Default.ShowChart,
+                title       = "Energy",
+                subtitle    = "Monitor usage",
+                accentColor = YellowAccent,
+                onClick     = { }
+            )
+            FeatureCard(
+                modifier    = Modifier.weight(1f),
+                icon        = Icons.Default.Warning,
+                title       = "Emergency",
+                subtitle    = "SOS & alerts",
+                accentColor = EmergencyRed,
+                onClick     = { }
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FeatureCard(
+                modifier    = Modifier.weight(1f),
+                icon        = Icons.Default.Mosque,
+                title       = "Islamic",
+                subtitle    = "Prayer & Quran",
+                accentColor = IslamicTeal,
+                onClick     = { }
+            )
+            FeatureCard(
+                modifier    = Modifier.weight(1f),
+                icon        = Icons.Default.NotificationsActive,
+                title       = "Notifications",
+                subtitle    = "All alerts",
+                accentColor = PurpleAccent,
+                onClick     = { }
+            )
+        }
+        // Full-width Profile card
+        FeatureCard(
+            modifier    = Modifier.fillMaxWidth(),
+            icon        = Icons.Default.Person,
+            title       = "Profile Settings",
+            subtitle    = "Account & preferences",
+            accentColor = Color(0xFF888888),
+            onClick     = { }
+        )
+    }
+}
+
+@Composable
+fun FeatureCard(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier  = modifier.height(76.dp).clickable { onClick() },
+        shape     = RoundedCornerShape(16.dp),
+        colors    = CardDefaults.cardColors(containerColor = CardDark),
+        border    = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF252525))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(accentColor.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icon, contentDescription = title, tint = accentColor, modifier = Modifier.size(22.dp))
+                }
+                Column {
+                    Text(title,    color = TextPrimary,   fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(subtitle, color = TextSecondary, fontSize = 10.sp)
+                }
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary.copy(alpha = 0.4f), modifier = Modifier.size(16.dp))
+        }
     }
 }
