@@ -84,7 +84,6 @@ fun ProfileScreen(onBackClick: () -> Unit) {
     var showEditPhoneDialog by remember { mutableStateOf(false) }
     var showChangePasswordDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
-    var showDeleteAccountDialog by remember { mutableStateOf(false) }
     var showSuccessToast by remember { mutableStateOf(false) }
     var toastMessage by remember { mutableStateOf("") }
 
@@ -294,50 +293,6 @@ fun ProfileScreen(onBackClick: () -> Unit) {
         (context as? ComponentActivity)?.finish()
     }
 
-    fun deleteAccount() {
-        isLoading = true
-        val userId = currentUser?.uid
-
-        coroutineScope.launch {
-            try {
-                userId?.let {
-                    val imageRef = storageRef.child("profile_images/$userId")
-                    val listResult = imageRef.listAll().await()
-                    listResult.items.forEach { item ->
-                        item.delete().await()
-                    }
-                }
-            } catch (e: Exception) {
-                // Ignore error if image doesn't exist
-            }
-
-            // Delete from Realtime Database (একই ডাটাবেসের users নোড থেকে)
-            userId?.let {
-                databaseRef.child(it).removeValue().await()
-            }
-
-            // Delete user from Authentication
-            currentUser?.delete()?.addOnCompleteListener { task ->
-                isLoading = false
-                if (task.isSuccessful) {
-                    showDeleteAccountDialog = false
-                    showFeedback("Account deleted successfully")
-                    coroutineScope.launch {
-                        delay(1500)
-                        context.startActivity(
-                            Intent(context, LoginActivity::class.java).apply {
-                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                            }
-                        )
-                        (context as? ComponentActivity)?.finish()
-                    }
-                } else {
-                    showFeedback("✗ Failed to delete account: ${task.exception?.message}")
-                }
-            }
-        }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -406,15 +361,6 @@ fun ProfileScreen(onBackClick: () -> Unit) {
                 onClick = { showLogoutDialog = true }
             )
 
-            ActionButton(
-                icon = Icons.Outlined.Delete,
-                title = "Delete Account",
-                subtitle = "Permanently delete your account",
-                iconColor = EmergencyRed,
-                isDanger = true,
-                onClick = { showDeleteAccountDialog = true }
-            )
-
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(
@@ -428,7 +374,7 @@ fun ProfileScreen(onBackClick: () -> Unit) {
             )
         }
 
-        // Dialogs (same as before)
+        // Dialogs
         if (showEditNameDialog) {
             EditNameDialog(
                 currentName = userName,
@@ -487,48 +433,6 @@ fun ProfileScreen(onBackClick: () -> Unit) {
                 },
                 dismissButton = {
                     TextButton(onClick = { showLogoutDialog = false }) {
-                        Text("Cancel", color = TextSecondary)
-                    }
-                },
-                containerColor = CardDark
-            )
-        }
-
-        if (showDeleteAccountDialog) {
-            AlertDialog(
-                onDismissRequest = { showDeleteAccountDialog = false },
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Warning, contentDescription = null, tint = EmergencyRed)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Delete Account", color = TextPrimary)
-                    }
-                },
-                text = {
-                    Column {
-                        Text("This action is permanent and cannot be undone.", color = TextSecondary)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("All your data will be erased from our servers.", color = TextSecondary)
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = { deleteAccount() },
-                        colors = ButtonDefaults.buttonColors(containerColor = EmergencyRed)
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                color = Color.White,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Text("Delete", color = Color.White)
-                        }
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showDeleteAccountDialog = false }) {
                         Text("Cancel", color = TextSecondary)
                     }
                 },
