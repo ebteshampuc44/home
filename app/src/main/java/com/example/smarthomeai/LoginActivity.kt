@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.Firebase
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
 
 class LoginActivity : ComponentActivity() {
@@ -57,6 +58,11 @@ fun LoginUI() {
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+
+    // Forgot Password dialog states
+    var showResetDialog by remember { mutableStateOf(false) }
+    var resetMessage by remember { mutableStateOf("") }
+    var isSendingReset by remember { mutableStateOf(false) }
 
     val greenGradient = Brush.horizontalGradient(
         listOf(Color(0xFF2CF46F), Color(0xFF008F8F))
@@ -123,7 +129,7 @@ fun LoginUI() {
             }
 
             // Loading Indicator
-            if (isLoading) {
+            if (isLoading || isSendingReset) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(40.dp),
                     color = Color(0xFF2CF46F)
@@ -152,7 +158,7 @@ fun LoginUI() {
                     cursorColor = Color(0xFF008F8F)
                 ),
                 modifier = Modifier.width(300.dp).height(58.dp),
-                enabled = !isLoading
+                enabled = !isLoading && !isSendingReset
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -179,17 +185,43 @@ fun LoginUI() {
                     cursorColor = Color(0xFF008F8F)
                 ),
                 modifier = Modifier.width(300.dp).height(58.dp),
-                enabled = !isLoading
+                enabled = !isLoading && !isSendingReset
             )
 
-            // FORGOT PASSWORD
+            // FORGOT PASSWORD BUTTON
             Box(
                 modifier = Modifier.width(300.dp),
                 contentAlignment = Alignment.CenterEnd
             ) {
-                TextButton(onClick = {}) {
+                TextButton(
+                    onClick = {
+                        if (emailInput.isBlank()) {
+                            showError = true
+                            errorMessage = "Please enter your email address first"
+                        } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(emailInput).matches()) {
+                            showError = true
+                            errorMessage = "Please enter a valid email address"
+                        } else {
+                            showError = false
+                            isSendingReset = true
+
+                            FirebaseAuth.getInstance().sendPasswordResetEmail(emailInput)
+                                .addOnSuccessListener {
+                                    isSendingReset = false
+                                    resetMessage = "Password reset email sent to $emailInput\n\n📧 Check your inbox and follow the instructions to reset your password.\n\n⚠️ Also check your spam folder if you don't see the email."
+                                    showResetDialog = true
+                                }
+                                .addOnFailureListener { e ->
+                                    isSendingReset = false
+                                    showError = true
+                                    errorMessage = e.message ?: "Failed to send reset email. Please try again."
+                                }
+                        }
+                    },
+                    enabled = !isLoading && !isSendingReset
+                ) {
                     Text(
-                        "Forgot password?",
+                        if (isSendingReset) "Sending..." else "Forgot password?",
                         color = Color(0xFF008F8F),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
@@ -215,21 +247,17 @@ fun LoginUI() {
                             showError = false
                             isLoading = true
 
-                            // Email/Password Login with Verification Check
                             auth.signInWithEmailAndPassword(emailInput, password)
                                 .addOnCompleteListener { task ->
                                     isLoading = false
                                     if (task.isSuccessful) {
                                         val user = auth.currentUser
-
-                                        // Check if email is verified
                                         if (user?.isEmailVerified == true) {
                                             val intent = Intent(context, HomeActivity::class.java)
                                             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                                             context.startActivity(intent)
                                             (context as? ComponentActivity)?.finish()
                                         } else {
-                                            // Email not verified - sign out and show error
                                             auth.signOut()
                                             showError = true
                                             errorMessage = "Please verify your email address first. Check your inbox."
@@ -246,7 +274,7 @@ fun LoginUI() {
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
                 contentPadding = PaddingValues(),
                 modifier = Modifier.width(300.dp).height(54.dp),
-                enabled = !isLoading
+                enabled = !isLoading && !isSendingReset
             ) {
                 Box(
                     modifier = Modifier
@@ -270,7 +298,7 @@ fun LoginUI() {
                 Text("Don't have an account? ", color = Color.Gray, fontSize = 13.sp)
                 TextButton(
                     onClick = {
-                        if (!isLoading) {
+                        if (!isLoading && !isSendingReset) {
                             context.startActivity(Intent(context, SignupActivity::class.java))
                         }
                     }
@@ -284,6 +312,62 @@ fun LoginUI() {
                 }
             }
         }
+    }
+
+    // Password Reset Success Dialog
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Email,
+                        contentDescription = null,
+                        tint = Color(0xFF2CF46F)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Reset Email Sent",
+                        color = Color.Black,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            text = {
+                Column {
+                    Text(
+                        resetMessage,
+                        color = Color.DarkGray,
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFFFFF3E0)
+                    ) {
+                        Text(
+                            "💡 Tip: If you don't see the email within a few minutes, check your spam/junk folder.",
+                            color = Color(0xFFE65100),
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showResetDialog = false },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF2CF46F),
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Text("OK", fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(16.dp)
+        )
     }
 }
 
