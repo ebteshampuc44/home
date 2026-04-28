@@ -1,8 +1,12 @@
 package com.example.smarthomeai
 
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -26,8 +30,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -36,16 +40,14 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import java.util.UUID
+import java.io.ByteArrayOutputStream
+import java.util.Base64
 
 class ProfileActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,26 +60,51 @@ class ProfileActivity : ComponentActivity() {
     }
 }
 
+// ==================== Image Helpers (একবারই ডিফাইন করা হয়েছে) ====================
+
+fun Bitmap.toBase64String(): String {
+    val stream = ByteArrayOutputStream()
+    this.compress(Bitmap.CompressFormat.JPEG, 50, stream)
+    val bytes = stream.toByteArray()
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        Base64.getEncoder().encodeToString(bytes)
+    } else {
+        android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
+    }
+}
+
+fun convertBase64ToBitmap(base64Str: String): Bitmap? {
+    return try {
+        val bytes = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Base64.getDecoder().decode(base64Str)
+        } else {
+            android.util.Base64.decode(base64Str, android.util.Base64.DEFAULT)
+        }
+        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    } catch (e: Exception) {
+        null
+    }
+}
+
+// ==================== Main Screen ====================
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(onBackClick: () -> Unit) {
     val context = LocalContext.current
     val auth = FirebaseAuth.getInstance()
     val currentUser = auth.currentUser
-    val storage = FirebaseStorage.getInstance()
-    val storageRef = storage.reference
-
-    // একই ডাটাবেস ব্যবহার করুন - শুধু "users" path এ
     val databaseRef = FirebaseDatabase.getInstance().getReference("users")
 
     val coroutineScope = rememberCoroutineScope()
 
-    // User data states
     var userName by remember { mutableStateOf(currentUser?.displayName ?: "Smart User") }
     var userEmail by remember { mutableStateOf(currentUser?.email ?: "user@example.com") }
     var phoneNumber by remember { mutableStateOf("") }
-    var profileImageUrl by remember { mutableStateOf<String?>(null) }
+    var profileImageBase64 by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var isUploadingImage by remember { mutableStateOf(false) }
+    var isRemovingImage by remember { mutableStateOf(false) }
 
     // Dialog states
     var showEditNameDialog by remember { mutableStateOf(false) }
@@ -87,13 +114,15 @@ fun ProfileScreen(onBackClick: () -> Unit) {
     var showSuccessToast by remember { mutableStateOf(false) }
     var toastMessage by remember { mutableStateOf("") }
 
+    // Remove image confirmation dialog
+    var showRemoveImageDialog by remember { mutableStateOf(false) }
+
     // Password change states
     var currentPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf("") }
 
-    // নতুন ইউজারের জন্য ডাটাবেস এন্ট্রি তৈরি করুন
     fun createUserEntry() {
         val userId = currentUser?.uid ?: return
         val userData = mapOf(
@@ -104,19 +133,13 @@ fun ProfileScreen(onBackClick: () -> Unit) {
         databaseRef.child(userId).setValue(userData)
     }
 
-    // Load user data from Realtime Database (একই ডাটাবেসের users নোড থেকে)
     fun loadUserData() {
         val userId = currentUser?.uid ?: return
-
         databaseRef.child(userId).get().addOnSuccessListener { snapshot ->
             if (snapshot.exists()) {
                 phoneNumber = snapshot.child("phoneNumber").getValue(String::class.java) ?: ""
-                val storedImageUrl = snapshot.child("profileImageUrl").getValue(String::class.java)
-                if (storedImageUrl != null && storedImageUrl.isNotEmpty()) {
-                    profileImageUrl = storedImageUrl
-                }
+                profileImageBase64 = snapshot.child("profileImageBase64").getValue(String::class.java)
             } else {
-                // নতুন ইউজার, ডাটাবেসে এন্ট্রি তৈরি করুন
                 createUserEntry()
             }
         }.addOnFailureListener {
@@ -124,7 +147,6 @@ fun ProfileScreen(onBackClick: () -> Unit) {
         }
     }
 
-    // Load data on start
     LaunchedEffect(Unit) {
         loadUserData()
     }
@@ -138,57 +160,36 @@ fun ProfileScreen(onBackClick: () -> Unit) {
         }
     }
 
-    // Upload image to Firebase Storage
-    suspend fun uploadImageToStorage(imageUri: Uri): String? {
+    suspend fun uriToBase64(uri: Uri): String? {
         return try {
-            val userId = currentUser?.uid ?: return null
-
-            // Delete old profile images first
-            try {
-                val oldImageRef = storageRef.child("profile_images/$userId")
-                val listResult = oldImageRef.listAll().await()
-                listResult.items.forEach { item ->
-                    item.delete().await()
-                }
-            } catch (e: Exception) {
-                // No old images or error, continue
+            val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val source = ImageDecoder.createSource(context.contentResolver, uri)
+                ImageDecoder.decodeBitmap(source)
+            } else {
+                MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
             }
-
-            // Upload new image
-            val imageRef = storageRef.child("profile_images/$userId/${UUID.randomUUID()}.jpg")
-            val uploadTask = imageRef.putFile(imageUri).await()
-            val downloadUrl = imageRef.downloadUrl.await()
-            downloadUrl.toString()
+            val scaledBitmap = Bitmap.createScaledBitmap(bitmap, 300, 300, true)
+            scaledBitmap.toBase64String()  // Changed function name
         } catch (e: Exception) {
-            showFeedback("✗ Image upload failed: ${e.message}")
+            showFeedback("✗ Failed to process image: ${e.message}")
             null
         }
     }
 
-    // Update profile image
     fun updateProfileImage(imageUri: Uri) {
         isUploadingImage = true
         coroutineScope.launch {
             try {
-                val imageUrl = uploadImageToStorage(imageUri)
-
-                if (imageUrl != null) {
+                val base64Image = uriToBase64(imageUri)
+                if (base64Image != null) {
                     val userId = currentUser?.uid ?: return@launch
-
-                    // Update Realtime Database (একই ডাটাবেসে)
-                    databaseRef.child(userId).child("profileImageUrl").setValue(imageUrl)
+                    databaseRef.child(userId).child("profileImageBase64").setValue(base64Image)
                         .addOnSuccessListener {
-                            profileImageUrl = imageUrl
+                            profileImageBase64 = base64Image
                             showFeedback("✓ Profile image updated successfully")
-
-                            // Update Firebase Auth profile photo URL
-                            val profileUpdates = UserProfileChangeRequest.Builder()
-                                .setPhotoUri(Uri.parse(imageUrl))
-                                .build()
-                            currentUser?.updateProfile(profileUpdates)
                         }
                         .addOnFailureListener {
-                            showFeedback("✗ Failed to save image URL to database")
+                            showFeedback("✗ Failed to save image")
                         }
                 }
             } catch (e: Exception) {
@@ -199,13 +200,30 @@ fun ProfileScreen(onBackClick: () -> Unit) {
         }
     }
 
-    // Image picker
+    // ==================== REMOVE PROFILE IMAGE FUNCTION ====================
+    fun removeProfileImage() {
+        isRemovingImage = true
+        val userId = currentUser?.uid ?: return
+
+        databaseRef.child(userId).child("profileImageBase64").removeValue()
+            .addOnSuccessListener {
+                profileImageBase64 = null
+                isRemovingImage = false
+                showRemoveImageDialog = false
+                showFeedback("✓ Profile image removed successfully")
+            }
+            .addOnFailureListener {
+                isRemovingImage = false
+                showRemoveImageDialog = false
+                showFeedback("✗ Failed to remove image")
+            }
+    }
+    // ================================================================
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        uri?.let {
-            updateProfileImage(it)
-        }
+        uri?.let { updateProfileImage(it) }
     }
 
     fun updateDisplayName(name: String) {
@@ -218,7 +236,6 @@ fun ProfileScreen(onBackClick: () -> Unit) {
             isLoading = false
             if (task.isSuccessful) {
                 userName = name
-                // Save to Realtime Database (একই ডাটাবেসে)
                 val userId = currentUser?.uid
                 if (userId != null) {
                     databaseRef.child(userId).child("displayName").setValue(name)
@@ -307,11 +324,13 @@ fun ProfileScreen(onBackClick: () -> Unit) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            ProfileImageSection(
-                profileImageUrl = profileImageUrl,
+            ProfileImageSectionWithRemove(
+                profileImageBase64 = profileImageBase64,
                 userName = userName,
                 isLoading = isUploadingImage,
-                onImageClick = { imagePickerLauncher.launch("image/*") }
+                isRemoving = isRemovingImage,
+                onImageClick = { imagePickerLauncher.launch("image/*") },
+                onRemoveClick = { showRemoveImageDialog = true }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -374,7 +393,44 @@ fun ProfileScreen(onBackClick: () -> Unit) {
             )
         }
 
-        // Dialogs
+        // Remove Image Confirmation Dialog
+        if (showRemoveImageDialog) {
+            AlertDialog(
+                onDismissRequest = { showRemoveImageDialog = false },
+                title = {
+                    Text("Remove Profile Image", color = TextPrimary, fontWeight = FontWeight.Bold)
+                },
+                text = {
+                    Text("Are you sure you want to remove your profile image?", color = TextSecondary)
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { removeProfileImage() },
+                        colors = ButtonDefaults.buttonColors(containerColor = EmergencyRed),
+                        enabled = !isRemovingImage
+                    ) {
+                        if (isRemovingImage) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Removing...", color = Color.White)
+                        } else {
+                            Text("Remove", color = Color.White)
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRemoveImageDialog = false }) {
+                        Text("Cancel", color = TextSecondary)
+                    }
+                },
+                containerColor = CardDark
+            )
+        }
+
         if (showEditNameDialog) {
             EditNameDialog(
                 currentName = userName,
@@ -446,6 +502,8 @@ fun ProfileScreen(onBackClick: () -> Unit) {
     }
 }
 
+// ==================== Top Bar ====================
+
 @Composable
 fun AnimatedProfileTopBar(onBackClick: () -> Unit) {
     Row(
@@ -488,13 +546,28 @@ fun AnimatedProfileTopBar(onBackClick: () -> Unit) {
     }
 }
 
+// ==================== Profile Image Section with Remove Button ====================
+
 @Composable
-fun ProfileImageSection(
-    profileImageUrl: String?,
+fun ProfileImageSectionWithRemove(
+    profileImageBase64: String?,
     userName: String,
     isLoading: Boolean,
-    onImageClick: () -> Unit
+    isRemoving: Boolean,
+    onImageClick: () -> Unit,
+    onRemoveClick: () -> Unit
 ) {
+    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+    val hasImage = profileImageBase64 != null && profileImageBase64.isNotEmpty()
+
+    LaunchedEffect(profileImageBase64) {
+        if (hasImage) {
+            bitmap = convertBase64ToBitmap(profileImageBase64!!)  // Changed function name
+        } else {
+            bitmap = null
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -505,34 +578,43 @@ fun ProfileImageSection(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Profile Image Circle with Edit/Remove options
             Box(
                 modifier = Modifier
                     .size(120.dp)
                     .clip(CircleShape)
                     .background(CardDark)
-                    .border(3.dp, GreenAccent, CircleShape)
-                    .clickable { onImageClick() },
+                    .border(3.dp, GreenAccent, CircleShape),
                 contentAlignment = Alignment.BottomEnd
             ) {
-                if (!profileImageUrl.isNullOrEmpty() && !isLoading) {
-                    AsyncImage(
-                        model = profileImageUrl,
-                        contentDescription = "Profile Image",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isLoading) {
+                when {
+                    isLoading || isRemoving -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(40.dp),
                                 color = GreenAccent,
                                 strokeWidth = 3.dp
                             )
-                        } else {
+                        }
+                    }
+                    bitmap != null && hasImage -> {
+                        androidx.compose.foundation.Image(
+                            bitmap = bitmap!!.asImageBitmap(),
+                            contentDescription = "Profile Image",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    else -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
                                 text = userName.take(1).uppercase(),
                                 color = GreenAccent,
@@ -543,19 +625,21 @@ fun ProfileImageSection(
                     }
                 }
 
+                // Edit Camera Button
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(32.dp)
                         .clip(CircleShape)
                         .background(GreenAccent)
-                        .border(2.dp, DarkBg, CircleShape),
+                        .border(2.dp, DarkBg, CircleShape)
+                        .clickable { onImageClick() },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Default.CameraAlt,
                         contentDescription = "Edit",
                         tint = Color.Black,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -567,20 +651,73 @@ fun ProfileImageSection(
                 fontWeight = FontWeight.Bold
             )
 
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = GreenAccent.copy(alpha = 0.1f)
+            // Action Buttons Row: Upload New & Remove Image
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Tap photo to change",
-                    color = GreenAccent,
-                    fontSize = 10.sp,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                )
+                // Upload New Button
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = GreenAccent.copy(alpha = 0.1f),
+                    modifier = Modifier.clickable { onImageClick() }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.CloudUpload,
+                            contentDescription = null,
+                            tint = GreenAccent,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = "Upload New",
+                            color = GreenAccent,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // Remove Image Button (only shows if image exists)
+                if (hasImage && !isRemoving) {
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = EmergencyRed.copy(alpha = 0.1f),
+                        modifier = Modifier.clickable { onRemoveClick() }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = null,
+                                tint = EmergencyRed,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "Remove Image",
+                                color = EmergencyRed,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
+
+// ==================== User Info Card ====================
 
 @Composable
 fun UserInfoCard(
@@ -659,6 +796,8 @@ fun UserInfoCard(
     }
 }
 
+// ==================== Section Header ====================
+
 @Composable
 fun SectionHeaderProfile(title: String) {
     Row(
@@ -682,6 +821,8 @@ fun SectionHeaderProfile(title: String) {
         )
     }
 }
+
+// ==================== Action Button ====================
 
 @Composable
 fun ActionButton(
@@ -751,6 +892,8 @@ fun ActionButton(
         }
     }
 }
+
+// ==================== Dialogs ====================
 
 @Composable
 fun EditNameDialog(
@@ -947,6 +1090,8 @@ fun ChangePasswordDialog(
         containerColor = CardDark
     )
 }
+
+// ==================== Toast ====================
 
 @Composable
 fun ProfileToast(message: String) {

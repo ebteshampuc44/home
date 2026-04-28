@@ -1,6 +1,7 @@
 package com.example.smarthomeai
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -20,7 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -28,12 +31,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ValueEventListener
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlin.random.Random
 
-// ── Color Palette ──────────────────────────────────────────────
+// Color Palette
 val DarkBg        = Color(0xFF0F0F0F)
 val CardDark      = Color(0xFF1A1A1A)
 val CardDarker    = Color(0xFF181818)
@@ -50,26 +56,40 @@ val BlueAccent    = Color(0xFF3B9BFF)
 val PurpleAccent  = Color(0xFFA855F7)
 val SectionLine   = Color(0xFF2A2A2A)
 
-// ─────────────────────────────────────────────────────────────
 class HomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val currentUser = Firebase.auth.currentUser
         if (currentUser == null) {
             startActivity(Intent(this, LoginActivity::class.java))
-            finish(); return
+            finish()
+            return
         }
         setContent { HomeScreen() }
     }
 }
 
-// ─────────────────────────────────────────────────────────────
+// Convert Base64 to Bitmap
+fun String.toBitmapFromBase64(): Bitmap? {
+    return try {
+        val bytes = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            java.util.Base64.getDecoder().decode(this)
+        } else {
+            android.util.Base64.decode(this, android.util.Base64.DEFAULT)
+        }
+        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    } catch (e: Exception) {
+        null
+    }
+}
+
 @Composable
 fun HomeScreen() {
-    val context      = LocalContext.current
-    val auth         = Firebase.auth
-    val currentUser  = auth.currentUser
+    val context = LocalContext.current
+    val auth = Firebase.auth
+    val currentUser = auth.currentUser
     val coroutineScope = rememberCoroutineScope()
+    val databaseRef = FirebaseDatabase.getInstance().getReference("users")
 
     val userName = remember(currentUser) {
         currentUser?.displayName?.takeIf { it.isNotBlank() }
@@ -80,19 +100,49 @@ fun HomeScreen() {
             ?: "Smart User"
     }
 
-    var showLogoutDialog  by remember { mutableStateOf(false) }
+    // Profile image state
+    var profileImageBase64 by remember { mutableStateOf<String?>(null) }
+    var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
-    // Device states - সব ডিভাইস অফ থাকবে শুরুতে
-    var lampOn    by remember { mutableStateOf(false) }
-    var fanOn     by remember { mutableStateOf(false) }
-    var acOn      by remember { mutableStateOf(false) }
-    var cctvOn    by remember { mutableStateOf(false) }
+    // Device states
+    var lampOn by remember { mutableStateOf(false) }
+    var fanOn by remember { mutableStateOf(false) }
+    var acOn by remember { mutableStateOf(false) }
+    var cctvOn by remember { mutableStateOf(false) }
 
-    // Real temperature state
+    // Temperature state
     var currentTemperature by remember { mutableStateOf(28.5f) }
     var isLoadingTemp by remember { mutableStateOf(false) }
 
-    // Function to fetch real temperature
+    var showLogoutDialog by remember { mutableStateOf(false) }
+
+    // Real-time listener for profile image
+    DisposableEffect(Unit) {
+        val userId = currentUser?.uid ?: return@DisposableEffect onDispose {}
+
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val base64 = snapshot.child("profileImageBase64").getValue(String::class.java)
+                profileImageBase64 = base64
+                if (!base64.isNullOrEmpty()) {
+                    profileBitmap = base64.toBitmapFromBase64()
+                } else {
+                    profileBitmap = null
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                // Handle error silently
+            }
+        }
+
+        databaseRef.child(userId).addValueEventListener(listener)
+
+        onDispose {
+            databaseRef.child(userId).removeEventListener(listener)
+        }
+    }
+
     fun fetchRealTemperature() {
         isLoadingTemp = true
         coroutineScope.launch {
@@ -103,12 +153,10 @@ fun HomeScreen() {
         }
     }
 
-    // Fetch temperature on app start and when AC status changes
     LaunchedEffect(acOn) {
         fetchRealTemperature()
     }
 
-    // Periodic temperature refresh (every 30 seconds)
     LaunchedEffect(Unit) {
         while(true) {
             delay(30000)
@@ -116,12 +164,11 @@ fun HomeScreen() {
         }
     }
 
-    // Logout dialog
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
-            title  = { Text("Logout", color = TextPrimary) },
-            text   = { Text("Are you sure you want to logout?", color = TextSecondary) },
+            title = { Text("Logout", color = TextPrimary) },
+            text = { Text("Are you sure you want to logout?", color = TextSecondary) },
             confirmButton = {
                 TextButton(onClick = {
                     auth.signOut()
@@ -139,9 +186,9 @@ fun HomeScreen() {
                     Text("No", color = TextSecondary)
                 }
             },
-            containerColor     = CardDark,
-            titleContentColor  = TextPrimary,
-            textContentColor   = TextSecondary
+            containerColor = CardDark,
+            titleContentColor = TextPrimary,
+            textContentColor = TextSecondary
         )
     }
 
@@ -156,20 +203,19 @@ fun HomeScreen() {
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 16.dp)
         ) {
-
-            // ── 1. TOP BAR ─────────────────────────────────
-            TopBar(
-                userName         = userName,
-                onProfileClick   = {
+            // Top Bar with Profile Image
+            TopBarWithProfileImage(
+                userName = userName,
+                profileBitmap = profileBitmap,
+                onProfileClick = {
                     context.startActivity(Intent(context, ProfileActivity::class.java))
                 },
-                onLogoutClick    = { showLogoutDialog = true },
-                onNotifClick     = {
+                onLogoutClick = { showLogoutDialog = true },
+                onNotifClick = {
                     context.startActivity(Intent(context, NotificationActivity::class.java))
                 }
             )
 
-            // ── 2. GREETING BANNER ─────────────────────────
             GreetingBanner(
                 activeCount = listOf(lampOn, fanOn, acOn, cctvOn).count { it },
                 temperature = currentTemperature,
@@ -179,12 +225,11 @@ fun HomeScreen() {
 
             SectionDivider()
 
-            // ── 3. QUICK CONTROL ───────────────────────────
             SectionHeader(title = "⚡ Quick Control", actionLabel = "Edit")
             QuickControlSection(
                 lampOn = lampOn, onLampToggle = { lampOn = it },
-                fanOn  = fanOn,  onFanToggle  = { fanOn  = it },
-                acOn   = acOn,   onAcToggle   = {
+                fanOn = fanOn, onFanToggle = { fanOn = it },
+                acOn = acOn, onAcToggle = {
                     acOn = it
                     fetchRealTemperature()
                 }
@@ -192,15 +237,11 @@ fun HomeScreen() {
 
             SectionDivider()
 
-            // ── 4. DEVICE STATUS ───────────────────────────
-            SectionHeader(
-                title       = "📡 Device Status",
-                actionLabel = "All (4)"
-            )
+            SectionHeader(title = "📡 Device Status", actionLabel = "All (4)")
             DeviceStatusSection(
                 lampOn = lampOn, onLampToggle = { lampOn = it },
-                fanOn  = fanOn,  onFanToggle  = { fanOn  = it },
-                acOn   = acOn,   onAcToggle   = {
+                fanOn = fanOn, onFanToggle = { fanOn = it },
+                acOn = acOn, onAcToggle = {
                     acOn = it
                     fetchRealTemperature()
                 },
@@ -209,7 +250,6 @@ fun HomeScreen() {
 
             SectionDivider()
 
-            // ── 5. FEATURES GRID ───────────────────────────
             SectionHeader(title = "🧩 Features")
             FeaturesSection(context = context)
 
@@ -218,12 +258,12 @@ fun HomeScreen() {
     }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  TOP BAR
-// ─────────────────────────────────────────────────────────────
+// ==================== Top Bar with Profile Image (Updated) ====================
+
 @Composable
-fun TopBar(
+fun TopBarWithProfileImage(
     userName: String,
+    profileBitmap: Bitmap?,
     onProfileClick: () -> Unit,
     onLogoutClick: () -> Unit,
     onNotifClick: () -> Unit
@@ -235,11 +275,12 @@ fun TopBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        // Avatar + Welcome
+        // Profile Avatar with Image - Left side
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // Profile Image Circle
             Box(
                 modifier = Modifier
                     .size(46.dp)
@@ -248,42 +289,57 @@ fun TopBar(
                     .clickable { onProfileClick() },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = "Profile",
-                    tint = TextSecondary,
-                    modifier = Modifier.size(24.dp)
-                )
+                if (profileBitmap != null) {
+                    // Show actual profile image
+                    androidx.compose.foundation.Image(
+                        bitmap = profileBitmap.asImageBitmap(),
+                        contentDescription = "Profile Picture",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    // Show default person icon
+                    Icon(
+                        Icons.Default.Person,
+                        contentDescription = "Profile",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
+
+            // User Name
             Column {
                 Text(
                     "Welcome back",
-                    color    = TextSecondary,
+                    color = TextSecondary,
                     fontSize = 11.sp,
                     letterSpacing = 0.5.sp
                 )
                 Text(
                     userName,
-                    color      = TextPrimary,
-                    fontSize   = 17.sp,
+                    color = TextPrimary,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
-                    maxLines   = 1,
-                    overflow   = TextOverflow.Ellipsis
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
 
-        // Action icons
+        // Action Buttons - Right side
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IconCircleButton(
-                icon             = Icons.Default.Logout,
-                onClick          = onLogoutClick,
-                backgroundColor  = CardDark
+                icon = Icons.Default.Logout,
+                onClick = onLogoutClick,
+                backgroundColor = CardDark
             )
             IconCircleButton(
-                icon             = Icons.Default.Notifications,
-                onClick          = onNotifClick,
-                backgroundColor  = CardDark
+                icon = Icons.Default.Notifications,
+                onClick = onNotifClick,
+                backgroundColor = CardDark
             )
         }
     }
@@ -307,9 +363,8 @@ fun IconCircleButton(
     }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  GREETING BANNER WITH REAL TEMPERATURE
-// ─────────────────────────────────────────────────────────────
+// ==================== Greeting Banner ====================
+
 @Composable
 fun GreetingBanner(activeCount: Int, temperature: Float, isLoading: Boolean, isAcOn: Boolean) {
     Box(
@@ -319,15 +374,14 @@ fun GreetingBanner(activeCount: Int, temperature: Float, isLoading: Boolean, isA
             .clip(RoundedCornerShape(20.dp))
             .background(Card2)
     ) {
-        // Subtle radial overlay
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(120.dp)
                 .background(
                     Brush.radialGradient(
-                        colors  = listOf(GreenAccent.copy(alpha = 0.07f), Color.Transparent),
-                        radius  = 300f
+                        colors = listOf(GreenAccent.copy(alpha = 0.07f), Color.Transparent),
+                        radius = 300f
                     )
                 )
         )
@@ -339,7 +393,6 @@ fun GreetingBanner(activeCount: Int, temperature: Float, isLoading: Boolean, isA
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                // Dynamic greeting based on time
                 val greeting = when (java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)) {
                     in 0..11 -> "Good Morning ☀️"
                     in 12..16 -> "Good Afternoon 🌤️"
@@ -365,7 +418,6 @@ fun GreetingBanner(activeCount: Int, temperature: Float, isLoading: Boolean, isA
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Active pill
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = GreenAccent.copy(alpha = 0.12f),
@@ -387,14 +439,13 @@ fun GreetingBanner(activeCount: Int, temperature: Float, isLoading: Boolean, isA
                         )
                         Text(
                             "$activeCount Active",
-                            color      = GreenAccent,
-                            fontSize   = 12.sp,
+                            color = GreenAccent,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
                 }
 
-                // Real Temperature Display
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -421,7 +472,6 @@ fun GreetingBanner(activeCount: Int, temperature: Float, isLoading: Boolean, isA
                     )
                 }
 
-                // Feels like or indoor/outdoor indicator
                 Text(
                     text = if (isAcOn) "Cooling: ${String.format("%.1f", temperature)}°C" else "Indoor Temp",
                     color = TextSecondary,
@@ -432,9 +482,8 @@ fun GreetingBanner(activeCount: Int, temperature: Float, isLoading: Boolean, isA
     }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  SECTION HELPERS
-// ─────────────────────────────────────────────────────────────
+// ==================== Section Helpers ====================
+
 @Composable
 fun SectionHeader(title: String, actionLabel: String? = null) {
     Row(
@@ -469,14 +518,13 @@ fun SectionDivider() {
     Spacer(modifier = Modifier.height(18.dp))
 }
 
-// ─────────────────────────────────────────────────────────────
-//  QUICK CONTROL
-// ─────────────────────────────────────────────────────────────
+// ==================== Quick Control ====================
+
 @Composable
 fun QuickControlSection(
     lampOn: Boolean, onLampToggle: (Boolean) -> Unit,
-    fanOn:  Boolean, onFanToggle:  (Boolean) -> Unit,
-    acOn:   Boolean, onAcToggle:   (Boolean) -> Unit
+    fanOn: Boolean, onFanToggle: (Boolean) -> Unit,
+    acOn: Boolean, onAcToggle: (Boolean) -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -485,25 +533,25 @@ fun QuickControlSection(
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         QuickControlCard(
-            modifier  = Modifier.weight(1f),
-            icon      = Icons.Default.Lightbulb,
-            label     = "Light",
-            isOn      = lampOn,
-            onToggle  = onLampToggle
+            modifier = Modifier.weight(1f),
+            icon = Icons.Default.Lightbulb,
+            label = "Light",
+            isOn = lampOn,
+            onToggle = onLampToggle
         )
         QuickControlCard(
-            modifier  = Modifier.weight(1f),
-            icon      = Icons.Default.Air,
-            label     = "Fan",
-            isOn      = fanOn,
-            onToggle  = onFanToggle
+            modifier = Modifier.weight(1f),
+            icon = Icons.Default.Air,
+            label = "Fan",
+            isOn = fanOn,
+            onToggle = onFanToggle
         )
         QuickControlCard(
-            modifier  = Modifier.weight(1f),
-            icon      = Icons.Default.AcUnit,
-            label     = "AC",
-            isOn      = acOn,
-            onToggle  = onAcToggle
+            modifier = Modifier.weight(1f),
+            icon = Icons.Default.AcUnit,
+            label = "AC",
+            isOn = acOn,
+            onToggle = onAcToggle
         )
     }
 }
@@ -516,18 +564,17 @@ fun QuickControlCard(
     isOn: Boolean,
     onToggle: (Boolean) -> Unit
 ) {
-    val bgColor     = if (isOn) GreenAccent.copy(alpha = 0.1f)  else CardDark
+    val bgColor = if (isOn) GreenAccent.copy(alpha = 0.1f) else CardDark
     val borderColor = if (isOn) GreenAccent.copy(alpha = 0.35f) else Color(0xFF252525)
-    val iconTint    = if (isOn) GreenAccent else TextSecondary
-    val iconBg      = if (isOn) GreenAccent.copy(alpha = 0.18f) else ChipBg
+    val iconTint = if (isOn) GreenAccent else TextSecondary
+    val iconBg = if (isOn) GreenAccent.copy(alpha = 0.18f) else ChipBg
 
     Card(
-        modifier  = modifier.height(108.dp),
-        shape     = RoundedCornerShape(16.dp),
-        colors    = CardDefaults.cardColors(containerColor = bgColor),
-        border    = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
+        modifier = modifier.height(108.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = bgColor),
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
     ) {
-        // Green top line when active
         if (isOn) {
             Box(
                 modifier = Modifier
@@ -555,14 +602,14 @@ fun QuickControlCard(
             }
             Text(label, color = iconTint, fontSize = 11.sp, fontWeight = FontWeight.Medium)
             Switch(
-                checked       = isOn,
+                checked = isOn,
                 onCheckedChange = onToggle,
-                modifier      = Modifier
+                modifier = Modifier
                     .height(20.dp)
                     .width(38.dp),
-                colors        = SwitchDefaults.colors(
-                    checkedThumbColor   = Color.Black,
-                    checkedTrackColor   = GreenAccent,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.Black,
+                    checkedTrackColor = GreenAccent,
                     uncheckedThumbColor = TextSecondary,
                     uncheckedTrackColor = ChipBg,
                     uncheckedBorderColor = ChipBg
@@ -572,14 +619,13 @@ fun QuickControlCard(
     }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  DEVICE STATUS
-// ─────────────────────────────────────────────────────────────
+// ==================== Device Status ====================
+
 @Composable
 fun DeviceStatusSection(
     lampOn: Boolean, onLampToggle: (Boolean) -> Unit,
-    fanOn:  Boolean, onFanToggle:  (Boolean) -> Unit,
-    acOn:   Boolean, onAcToggle:   (Boolean) -> Unit,
+    fanOn: Boolean, onFanToggle: (Boolean) -> Unit,
+    acOn: Boolean, onAcToggle: (Boolean) -> Unit,
     cctvOn: Boolean, onCctvToggle: (Boolean) -> Unit
 ) {
     Column(
@@ -588,34 +634,34 @@ fun DeviceStatusSection(
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             DeviceStatusCard(
-                modifier  = Modifier.weight(1f),
-                icon      = Icons.Default.Lightbulb,
-                title     = "Smart Light",
-                isOn      = lampOn,
-                onToggle  = onLampToggle
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.Lightbulb,
+                title = "Smart Light",
+                isOn = lampOn,
+                onToggle = onLampToggle
             )
             DeviceStatusCard(
-                modifier  = Modifier.weight(1f),
-                icon      = Icons.Default.Air,
-                title     = "Smart Fan",
-                isOn      = fanOn,
-                onToggle  = onFanToggle
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.Air,
+                title = "Smart Fan",
+                isOn = fanOn,
+                onToggle = onFanToggle
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             DeviceStatusCard(
-                modifier  = Modifier.weight(1f),
-                icon      = Icons.Default.AcUnit,
-                title     = "Air Cond.",
-                isOn      = acOn,
-                onToggle  = onAcToggle
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.AcUnit,
+                title = "Air Cond.",
+                isOn = acOn,
+                onToggle = onAcToggle
             )
             DeviceStatusCard(
-                modifier  = Modifier.weight(1f),
-                icon      = Icons.Default.Videocam,
-                title     = "CCTV",
-                isOn      = cctvOn,
-                onToggle  = onCctvToggle
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.Videocam,
+                title = "CCTV",
+                isOn = cctvOn,
+                onToggle = onCctvToggle
             )
         }
     }
@@ -629,14 +675,14 @@ fun DeviceStatusCard(
     isOn: Boolean,
     onToggle: (Boolean) -> Unit
 ) {
-    val iconBg   = if (isOn) GreenAccent.copy(alpha = 0.15f) else Color(0xFF252525)
+    val iconBg = if (isOn) GreenAccent.copy(alpha = 0.15f) else Color(0xFF252525)
     val iconTint = if (isOn) GreenAccent else Color(0xFF555555)
 
     Card(
-        modifier  = modifier.height(72.dp),
-        shape     = RoundedCornerShape(14.dp),
-        colors    = CardDefaults.cardColors(containerColor = CardDark),
-        border    = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF252525))
+        modifier = modifier.height(72.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = CardDark),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF252525))
     ) {
         Row(
             modifier = Modifier
@@ -659,21 +705,21 @@ fun DeviceStatusCard(
                     Text(title, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                     Text(
                         if (isOn) "● ON" else "○ OFF",
-                        color      = if (isOn) GreenAccent else Color(0xFF555555),
-                        fontSize   = 10.sp,
+                        color = if (isOn) GreenAccent else Color(0xFF555555),
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
             }
             Switch(
-                checked         = isOn,
+                checked = isOn,
                 onCheckedChange = onToggle,
-                modifier        = Modifier.height(18.dp).width(34.dp),
-                colors          = SwitchDefaults.colors(
-                    checkedThumbColor    = Color.Black,
-                    checkedTrackColor    = GreenAccent,
-                    uncheckedThumbColor  = Color(0xFF666666),
-                    uncheckedTrackColor  = ChipBg,
+                modifier = Modifier.height(18.dp).width(34.dp),
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.Black,
+                    checkedTrackColor = GreenAccent,
+                    uncheckedThumbColor = Color(0xFF666666),
+                    uncheckedTrackColor = ChipBg,
                     uncheckedBorderColor = ChipBg
                 )
             )
@@ -681,9 +727,8 @@ fun DeviceStatusCard(
     }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  FEATURES GRID WITH ALL NAVIGATION
-// ─────────────────────────────────────────────────────────────
+// ==================== Features Section ====================
+
 @Composable
 fun FeaturesSection(context: android.content.Context) {
     Column(
@@ -692,78 +737,77 @@ fun FeaturesSection(context: android.content.Context) {
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             FeatureCard(
-                modifier    = Modifier.weight(1f),
-                icon        = Icons.Default.Devices,
-                title       = "Device Control",
-                subtitle    = "Manage all",
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.Devices,
+                title = "Device Control",
+                subtitle = "Manage all",
                 accentColor = GreenAccent,
-                onClick     = {
+                onClick = {
                     context.startActivity(Intent(context, DeviceControlActivity::class.java))
                 }
             )
             FeatureCard(
-                modifier    = Modifier.weight(1f),
-                icon        = Icons.Default.Tune,
-                title       = "Automation",
-                subtitle    = "Smart rules",
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.Tune,
+                title = "Automation",
+                subtitle = "Smart rules",
                 accentColor = BlueAccent,
-                onClick     = {
+                onClick = {
                     context.startActivity(Intent(context, AutomationActivity::class.java))
                 }
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             FeatureCard(
-                modifier    = Modifier.weight(1f),
-                icon        = Icons.Default.ShowChart,
-                title       = "Energy",
-                subtitle    = "Monitor usage",
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.ShowChart,
+                title = "Energy",
+                subtitle = "Monitor usage",
                 accentColor = YellowAccent,
-                onClick     = {
+                onClick = {
                     context.startActivity(Intent(context, EnergyActivity::class.java))
                 }
             )
             FeatureCard(
-                modifier    = Modifier.weight(1f),
-                icon        = Icons.Default.Warning,
-                title       = "Emergency",
-                subtitle    = "SOS & alerts",
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.Warning,
+                title = "Emergency",
+                subtitle = "SOS & alerts",
                 accentColor = EmergencyRed,
-                onClick     = {
+                onClick = {
                     context.startActivity(Intent(context, EmergencyActivity::class.java))
                 }
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             FeatureCard(
-                modifier    = Modifier.weight(1f),
-                icon        = Icons.Default.Mosque,
-                title       = "Islamic",
-                subtitle    = "Prayer & Quran",
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.Mosque,
+                title = "Islamic",
+                subtitle = "Prayer & Quran",
                 accentColor = IslamicTeal,
-                onClick     = {
+                onClick = {
                     context.startActivity(Intent(context, IslamicFeatureActivity::class.java))
                 }
             )
             FeatureCard(
-                modifier    = Modifier.weight(1f),
-                icon        = Icons.Default.Notifications,
-                title       = "Notifications",
-                subtitle    = "All alerts",
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.Notifications,
+                title = "Notifications",
+                subtitle = "All alerts",
                 accentColor = PurpleAccent,
-                onClick     = {
+                onClick = {
                     context.startActivity(Intent(context, NotificationActivity::class.java))
                 }
             )
         }
-        // Profile Settings Card - Full width
         FeatureCard(
-            modifier    = Modifier.fillMaxWidth(),
-            icon        = Icons.Default.Person,
-            title       = "Profile Settings",
-            subtitle    = "Account & preferences",
+            modifier = Modifier.fillMaxWidth(),
+            icon = Icons.Default.Person,
+            title = "Profile Settings",
+            subtitle = "Account & preferences",
             accentColor = Color(0xFF888888),
-            onClick     = {
+            onClick = {
                 context.startActivity(Intent(context, ProfileActivity::class.java))
             }
         )
@@ -780,10 +824,10 @@ fun FeatureCard(
     onClick: () -> Unit
 ) {
     Card(
-        modifier  = modifier.height(76.dp).clickable { onClick() },
-        shape     = RoundedCornerShape(16.dp),
-        colors    = CardDefaults.cardColors(containerColor = CardDark),
-        border    = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF252525))
+        modifier = modifier.height(76.dp).clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = CardDark),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF252525))
     ) {
         Row(
             modifier = Modifier
@@ -806,7 +850,7 @@ fun FeatureCard(
                     Icon(icon, contentDescription = title, tint = accentColor, modifier = Modifier.size(22.dp))
                 }
                 Column {
-                    Text(title,    color = TextPrimary,   fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(title, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Text(subtitle, color = TextSecondary, fontSize = 10.sp)
                 }
             }
