@@ -149,7 +149,7 @@ fun LoginUI() {
             OutlinedTextField(
                 value = emailInput,
                 onValueChange = { emailInput = it },
-                placeholder = { Text("Gmail address", fontSize = 15.sp, color = Color.Gray) },
+                placeholder = { Text("Email address", fontSize = 15.sp, color = Color.Gray) },
                 leadingIcon = {
                     Icon(Icons.Default.Email, contentDescription = null, tint = Color.Gray)
                 },
@@ -239,7 +239,7 @@ fun LoginUI() {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // SIGN IN BUTTON - Now uses Firebase Auth for ALL users including admin
+            // SIGN IN BUTTON
             Button(
                 onClick = {
                     when {
@@ -326,32 +326,6 @@ fun LoginUI() {
                         color = Color(0xFF008F8F),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            // Admin Login Hint
-            Spacer(modifier = Modifier.height(16.dp))
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
-                modifier = Modifier.width(300.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Lock,
-                        contentDescription = null,
-                        tint = Color(0xFF2E7D32),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        "Admin: smarthome@gmail.com / 123456",
-                        color = Color(0xFF2E7D32),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
                     )
                 }
             }

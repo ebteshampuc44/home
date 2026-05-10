@@ -39,6 +39,11 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import kotlin.math.*
 
 class IslamicFeatureActivity : ComponentActivity() {
@@ -52,6 +57,51 @@ class IslamicFeatureActivity : ComponentActivity() {
     }
 }
 
+// ==================== Prayer Times Data with Monthly Variations ====================
+
+data class MonthlyPrayerTimes(
+    val month: Int,
+    val monthName: String,
+    val fajr: String,
+    val sunrise: String,
+    val dhuhr: String,
+    val asr: String,
+    val maghrib: String,
+    val isha: String
+)
+
+// Dhaka Monthly Prayer Times (approximate average for each month)
+val dhakaMonthlyTimes = listOf(
+    MonthlyPrayerTimes(1, "January", "5:25 AM", "6:45 AM", "12:05 PM", "3:25 PM", "5:30 PM", "6:50 PM"),
+    MonthlyPrayerTimes(2, "February", "5:15 AM", "6:35 AM", "12:10 PM", "3:35 PM", "5:50 PM", "7:05 PM"),
+    MonthlyPrayerTimes(3, "March", "5:00 AM", "6:20 AM", "12:10 PM", "3:40 PM", "6:10 PM", "7:20 PM"),
+    MonthlyPrayerTimes(4, "April", "4:40 AM", "5:55 AM", "12:00 PM", "3:30 PM", "6:20 PM", "7:35 PM"),
+    MonthlyPrayerTimes(5, "May", "4:25 AM", "5:35 AM", "11:55 AM", "3:25 PM", "6:35 PM", "7:50 PM"),
+    MonthlyPrayerTimes(6, "June", "4:15 AM", "5:25 AM", "11:55 AM", "3:25 PM", "6:45 PM", "8:00 PM"),
+    MonthlyPrayerTimes(7, "July", "4:20 AM", "5:30 AM", "12:00 PM", "3:30 PM", "6:45 PM", "7:55 PM"),
+    MonthlyPrayerTimes(8, "August", "4:30 AM", "5:40 AM", "12:00 PM", "3:30 PM", "6:35 PM", "7:45 PM"),
+    MonthlyPrayerTimes(9, "September", "4:45 AM", "5:55 AM", "12:00 PM", "3:25 PM", "6:10 PM", "7:25 PM"),
+    MonthlyPrayerTimes(10, "October", "5:00 AM", "6:10 AM", "12:00 PM", "3:20 PM", "5:45 PM", "7:00 PM"),
+    MonthlyPrayerTimes(11, "November", "5:15 AM", "6:30 AM", "12:00 PM", "3:20 PM", "5:20 PM", "6:40 PM"),
+    MonthlyPrayerTimes(12, "December", "5:25 AM", "6:45 AM", "12:05 PM", "3:25 PM", "5:15 PM", "6:35 PM")
+)
+
+// Chittagong Monthly Prayer Times
+val chittagongMonthlyTimes = listOf(
+    MonthlyPrayerTimes(1, "January", "5:15 AM", "6:35 AM", "11:55 AM", "3:15 PM", "5:20 PM", "6:40 PM"),
+    MonthlyPrayerTimes(2, "February", "5:05 AM", "6:25 AM", "12:00 PM", "3:25 PM", "5:40 PM", "6:55 PM"),
+    MonthlyPrayerTimes(3, "March", "4:50 AM", "6:10 AM", "12:00 PM", "3:30 PM", "6:00 PM", "7:10 PM"),
+    MonthlyPrayerTimes(4, "April", "4:30 AM", "5:45 AM", "11:50 AM", "3:20 PM", "6:10 PM", "7:25 PM"),
+    MonthlyPrayerTimes(5, "May", "4:15 AM", "5:25 AM", "11:45 AM", "3:15 PM", "6:25 PM", "7:40 PM"),
+    MonthlyPrayerTimes(6, "June", "4:05 AM", "5:15 AM", "11:45 AM", "3:15 PM", "6:35 PM", "7:50 PM"),
+    MonthlyPrayerTimes(7, "July", "4:10 AM", "5:20 AM", "11:50 AM", "3:20 PM", "6:35 PM", "7:45 PM"),
+    MonthlyPrayerTimes(8, "August", "4:20 AM", "5:30 AM", "11:50 AM", "3:20 PM", "6:25 PM", "7:35 PM"),
+    MonthlyPrayerTimes(9, "September", "4:35 AM", "5:45 AM", "11:50 AM", "3:15 PM", "6:00 PM", "7:15 PM"),
+    MonthlyPrayerTimes(10, "October", "4:50 AM", "6:00 AM", "11:50 AM", "3:10 PM", "5:35 PM", "6:50 PM"),
+    MonthlyPrayerTimes(11, "November", "5:05 AM", "6:20 AM", "11:50 AM", "3:10 PM", "5:10 PM", "6:30 PM"),
+    MonthlyPrayerTimes(12, "December", "5:15 AM", "6:35 AM", "11:55 AM", "3:15 PM", "5:05 PM", "6:25 PM")
+)
+
 data class CityPrayerTimes(
     val city: String,
     val fajr: String,
@@ -62,25 +112,44 @@ data class CityPrayerTimes(
     val isha: String
 )
 
-val dhakaPrayerTimes = CityPrayerTimes(
-    city = "Dhaka",
-    fajr = "4:19 AM",
-    sunrise = "5:45 AM",
-    dhuhr = "11:57 AM",
-    asr = "3:23 PM",
-    maghrib = "6:08 PM",
-    isha = "7:28 PM"
-)
+// Function to get current month's prayer times for Dhaka
+fun getCurrentDhakaPrayerTimes(): CityPrayerTimes {
+    val calendar = Calendar.getInstance()
+    val currentMonth = calendar.get(Calendar.MONTH) + 1 // January = 0, so +1
+    val monthData = dhakaMonthlyTimes.find { it.month == currentMonth } ?: dhakaMonthlyTimes[3] // Default April
+    return CityPrayerTimes(
+        city = "Dhaka",
+        fajr = monthData.fajr,
+        sunrise = monthData.sunrise,
+        dhuhr = monthData.dhuhr,
+        asr = monthData.asr,
+        maghrib = monthData.maghrib,
+        isha = monthData.isha
+    )
+}
 
-val chittagongPrayerTimes = CityPrayerTimes(
-    city = "Chittagong",
-    fajr = "4:10 AM",
-    sunrise = "5:35 AM",
-    dhuhr = "11:48 AM",
-    asr = "3:14 PM",
-    maghrib = "5:59 PM",
-    isha = "7:19 PM"
-)
+// Function to get current month's prayer times for Chittagong
+fun getCurrentChittagongPrayerTimes(): CityPrayerTimes {
+    val calendar = Calendar.getInstance()
+    val currentMonth = calendar.get(Calendar.MONTH) + 1
+    val monthData = chittagongMonthlyTimes.find { it.month == currentMonth } ?: chittagongMonthlyTimes[3]
+    return CityPrayerTimes(
+        city = "Chittagong",
+        fajr = monthData.fajr,
+        sunrise = monthData.sunrise,
+        dhuhr = monthData.dhuhr,
+        asr = monthData.asr,
+        maghrib = monthData.maghrib,
+        isha = monthData.isha
+    )
+}
+
+// Legacy variables for backward compatibility
+val dhakaPrayerTimes: CityPrayerTimes
+    get() = getCurrentDhakaPrayerTimes()
+
+val chittagongPrayerTimes: CityPrayerTimes
+    get() = getCurrentChittagongPrayerTimes()
 
 @Composable
 fun rememberCompassBearing(): Float {
@@ -151,6 +220,11 @@ fun IslamicFeatureScreen(onBackClick: () -> Unit) {
     var prayerModeEnabled by remember { mutableStateOf(false) }
     var selectedCity by remember { mutableStateOf(0) }
 
+    // Current month display
+    val calendar = Calendar.getInstance()
+    val currentMonthName = SimpleDateFormat("MMMM", Locale.getDefault()).format(Date())
+    val currentYear = calendar.get(Calendar.YEAR)
+
     fun showFeedback(message: String) {
         toastMessage = message
         showSuccessToast = true
@@ -208,6 +282,41 @@ fun IslamicFeatureScreen(onBackClick: () -> Unit) {
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Month and Year Display
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = IslamicTeal.copy(alpha = 0.1f)),
+                border = BorderStroke(1.dp, IslamicTeal.copy(alpha = 0.3f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = IslamicTeal, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "$currentMonthName $currentYear",
+                        color = IslamicTeal,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        "(Monthly Prayer Schedule)",
+                        color = TextSecondary,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             CitySelector(
                 selectedCity = selectedCity,
                 onCityChange = { selectedCity = it }
@@ -215,8 +324,9 @@ fun IslamicFeatureScreen(onBackClick: () -> Unit) {
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            val prayerData = if (selectedCity == 0) dhakaPrayerTimes else chittagongPrayerTimes
-            EnhancedPrayerTimeCard(cityData = prayerData)
+            // Get current prayer times based on selected city and current month
+            val prayerData = if (selectedCity == 0) getCurrentDhakaPrayerTimes() else getCurrentChittagongPrayerTimes()
+            EnhancedPrayerTimeCard(cityData = prayerData, currentMonth = currentMonthName)
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -232,7 +342,7 @@ fun IslamicFeatureScreen(onBackClick: () -> Unit) {
                         if (it) {
                             saveIslamicNotification(
                                 "🕌 Azan Reminder Enabled",
-                                "You will now receive prayer time notifications."
+                                "You will now receive prayer time notifications based on $currentMonthName schedule."
                             )
                         } else {
                             saveIslamicNotification(
@@ -657,8 +767,7 @@ data class PrayerTime(val name: String, val arabicName: String, val time: String
                       val icon: String, val isNext: Boolean)
 
 @Composable
-fun EnhancedPrayerTimeCard(cityData: CityPrayerTimes) {
-
+fun EnhancedPrayerTimeCard(cityData: CityPrayerTimes, currentMonth: String = "") {
     val currentHour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
     val currentMinute = java.util.Calendar.getInstance().get(java.util.Calendar.MINUTE)
     val nowMinutes = currentHour * 60 + currentMinute
@@ -717,7 +826,7 @@ fun EnhancedPrayerTimeCard(cityData: CityPrayerTimes) {
                     Column {
                         Text("Prayer Times", color = TextPrimary,
                             fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        Text(cityData.city, color = IslamicTeal, fontSize = 12.sp,
+                        Text("${cityData.city} • $currentMonth", color = IslamicTeal, fontSize = 12.sp,
                             fontWeight = FontWeight.Medium)
                     }
                 }
@@ -1018,4 +1127,32 @@ private fun BoxScope.IslamicCustomToast(message: String) {
             }
         }
     }
+}
+
+// Extension function to add notification to Firestore
+suspend fun addFirestoreNotification(
+    userId: String,
+    type: String,
+    title: String,
+    message: String,
+    actionData: String? = null,
+    modeName: String? = null
+) {
+    val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+    val notificationData = hashMapOf(
+        "type" to type,
+        "title" to title,
+        "message" to message,
+        "timestamp" to System.currentTimeMillis(),
+        "isRead" to false,
+        "actionData" to actionData
+    )
+    if (modeName != null) {
+        notificationData["modeName"] = modeName
+    }
+    firestore.collection("users")
+        .document(userId)
+        .collection("notifications")
+        .add(notificationData)
+        .await()
 }
