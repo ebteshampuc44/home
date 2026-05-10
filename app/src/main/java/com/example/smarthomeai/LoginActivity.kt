@@ -33,14 +33,22 @@ import androidx.compose.ui.unit.sp
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.FirebaseFirestore
 
 class LoginActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val auth = Firebase.auth
-        if (auth.currentUser != null) {
-            startActivity(Intent(this, HomeActivity::class.java))
+        val currentUser = auth.currentUser
+
+        if (currentUser != null) {
+            // Check if it's admin
+            if (currentUser.email == "smarthome@gmail.com") {
+                startActivity(Intent(this, AdminPanelActivity::class.java))
+            } else {
+                startActivity(Intent(this, HomeActivity::class.java))
+            }
             finish()
             return
         }
@@ -231,7 +239,7 @@ fun LoginUI() {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // SIGN IN BUTTON
+            // SIGN IN BUTTON - Now uses Firebase Auth for ALL users including admin
             Button(
                 onClick = {
                     when {
@@ -252,12 +260,22 @@ fun LoginUI() {
                                     isLoading = false
                                     if (task.isSuccessful) {
                                         val user = auth.currentUser
-                                        if (user?.isEmailVerified == true) {
+
+                                        // Check if email is verified (skip for admin)
+                                        if (user?.email == "smarthome@gmail.com") {
+                                            // Admin - no verification needed
+                                            val intent = Intent(context, AdminPanelActivity::class.java)
+                                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                                            context.startActivity(intent)
+                                            (context as? ComponentActivity)?.finish()
+                                        } else if (user?.isEmailVerified == true) {
+                                            // Normal user with verified email
                                             val intent = Intent(context, HomeActivity::class.java)
                                             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                                             context.startActivity(intent)
                                             (context as? ComponentActivity)?.finish()
                                         } else {
+                                            // Normal user but email not verified
                                             auth.signOut()
                                             showError = true
                                             errorMessage = "Please verify your email address first. Check your inbox."
@@ -308,6 +326,32 @@ fun LoginUI() {
                         color = Color(0xFF008F8F),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Admin Login Hint
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
+                modifier = Modifier.width(300.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = Color(0xFF2E7D32),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        "Admin: smarthome@gmail.com / 123456",
+                        color = Color(0xFF2E7D32),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
